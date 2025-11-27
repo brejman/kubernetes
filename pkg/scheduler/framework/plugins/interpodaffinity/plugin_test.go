@@ -48,16 +48,30 @@ func Test_isSchedulableAfterPodChange(t *testing.T) {
 			expectedHint: fwk.Queue,
 		},
 		{
-			name:         "add an un-scheduled pod",
+			name:         "add an un-scheduled pod which matches target pod affinity",
 			pod:          st.MakePod().Name("p").PodAffinityIn("service", "region", []string{"securityscan", "value2"}, st.PodAffinityWithRequiredReq).Obj(),
 			newPod:       st.MakePod().Label("service", "securityscan").Obj(),
 			expectedHint: fwk.QueueSkip,
 		},
 		{
-			name:         "add a pod with nominated node",
+			name:         "add a pod with nominated node which matches target pod affinity",
 			pod:          st.MakePod().Name("p").PodAffinityIn("service", "region", []string{"securityscan", "value2"}, st.PodAffinityWithRequiredReq).Obj(),
 			newPod:       st.MakePod().Label("service", "securityscan").NominatedNodeName("fake-node").Obj(),
 			expectedHint: fwk.Queue,
+		},
+		{
+			name:         "update a pod from un-scheduled to nominated, which matches target pod affinity",
+			pod:          st.MakePod().Name("p").PodAffinityIn("service", "region", []string{"securityscan", "value2"}, st.PodAffinityWithRequiredReq).Obj(),
+			newPod:       st.MakePod().Label("service", "securityscan").NominatedNodeName("fake-node").Obj(),
+			oldPod:       st.MakePod().Label("service", "securityscan").Obj(),
+			expectedHint: fwk.Queue,
+		},
+		{
+			name:         "update a pod from nominated to un-scheduled, which matches target pod affinity",
+			pod:          st.MakePod().Name("p").PodAffinityIn("service", "region", []string{"securityscan", "value2"}, st.PodAffinityWithRequiredReq).Obj(),
+			newPod:       st.MakePod().Label("service", "securityscan").Obj(),
+			oldPod:       st.MakePod().Label("service", "securityscan").NominatedNodeName("fake-node").Obj(),
+			expectedHint: fwk.QueueSkip,
 		},
 		{
 			name:         "add a pod which doesn't match the pod affinity",
