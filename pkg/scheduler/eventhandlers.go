@@ -336,6 +336,9 @@ func (sched *Scheduler) updatePodInSchedulingQueue(oldPod, newPod *v1.Pod) {
 		// because the scheduler treats such a pod as if it was already assigned when scheduling lower or equal priority pods.
 		sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.EventAssignedPodDelete, oldPod, nil, getLEPriorityPreCheck(corev1helpers.PodPriority(oldPod)))
 	}
+	if hasNominatedNodeNameChanged(newPod, oldPod) {
+		sched.SchedulingQueue.MoveAllToActiveOrBackoffQueue(logger, framework.EventAssignedPodAdd, nil, newPod, getLEPriorityPreCheck(corev1helpers.PodPriority(newPod)))
+	}
 }
 
 // hasNominatedNodeNameChanged returns true when nominated node name has existed but changed.

@@ -95,12 +95,32 @@ func TestEventHandlers_MoveToActiveOnNominatedNodeUpdate(t *testing.T) {
 		}
 		return fwk.Queue, nil
 	}
+	queueHintForPodAdd := func(logger klog.Logger, pod *v1.Pod, oldObj, newObj interface{}) (fwk.QueueingHint, error) {
+		_, newPod, err := util.As[*v1.Pod](oldObj, newObj)
+		if err != nil {
+			t.Errorf("Failed to convert objects to pods: %v", err)
+		}
+		if newPod.Status.NominatedNodeName == "" {
+			return fwk.QueueSkip, nil
+		}
+		if pod.ObjectMeta.Name == medPriorityPod.Name {
+			// simulate affinity for medPriorityPod
+			return fwk.Queue, nil
+		}
+		return fwk.QueueSkip, nil
+	}
 	queueingHintMap := internalqueue.QueueingHintMapPerProfile{
 		testSchedulerName: {
 			framework.EventAssignedPodDelete: {
 				{
 					PluginName:     "fooPlugin1",
 					QueueingHintFn: queueHintForPodDelete,
+				},
+			},
+			framework.EventAssignedPodAdd: {
+				{
+					PluginName:     "fooPlugin1",
+					QueueingHintFn: queueHintForPodAdd,
 				},
 			},
 		},
@@ -139,14 +159,14 @@ func TestEventHandlers_MoveToActiveOnNominatedNodeUpdate(t *testing.T) {
 			wantInActiveOrBackoff: sets.New(lowPriorityPod.Name, medPriorityPod.Name),
 		},
 		{
-			name: "Addition of a nominated node name to the high priority pod that did not have it before shouldn't trigger rescheduling",
+			name: "Addition of a nominated node name to the high priority pod that did not have it before should trigger rescheduling of lower priority pods with affinity",
 			updateFunc: func(s *Scheduler) {
 				updatedPod := highPriorityPod.DeepCopy()
 				updatedPod.Status.NominatedNodeName = "node2"
 				updatedPod.ResourceVersion = "1"
 				s.updatePodInSchedulingQueue(highPriorityPod, updatedPod)
 			},
-			wantInActiveOrBackoff: sets.New[string](),
+			wantInActiveOrBackoff: sets.New(medPriorityPod.Name),
 		},
 	}
 
