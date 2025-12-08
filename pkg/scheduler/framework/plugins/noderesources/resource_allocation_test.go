@@ -310,7 +310,7 @@ func TestCalculateResourceAllocatableRequest(t *testing.T) {
 				deviceClassWithExtendResourceName,
 				st.MakeResourceSlice(nodeName, driverName).Device("device-1").Obj(),
 			},
-			expectedAllocatable: 1,
+			expectedAllocatable: 1, // 1 device `device-1`
 			expectedAllocated:   0,
 		},
 		"DRA-backed-resource-implicit": {
@@ -325,7 +325,7 @@ func TestCalculateResourceAllocatableRequest(t *testing.T) {
 				},
 				st.MakeResourceSlice(nodeName, driverName).Device("device-1").Obj(),
 			},
-			expectedAllocatable: 1,
+			expectedAllocatable: 1, // 1 device `device-1`
 			expectedAllocated:   0,
 		},
 		"DRA-backed-resource-no-slices": {
@@ -361,8 +361,8 @@ func TestCalculateResourceAllocatableRequest(t *testing.T) {
 					}).
 					Obj(),
 			},
-			expectedAllocatable: 2,
-			expectedAllocated:   1, // 1 allocated
+			expectedAllocatable: 2, // 2 allocatable devices `device-1`, `device-2`
+			expectedAllocated:   1, // 1 allocated by `testClaim`
 		},
 		"DRA-backed-resource-with-shared-device-allocation": {
 			enableDRAExtendedResource: true,
@@ -390,8 +390,8 @@ func TestCalculateResourceAllocatableRequest(t *testing.T) {
 					}).
 					Obj(),
 			},
-			expectedAllocatable: 2,
-			expectedAllocated:   1, // 1 allocated (shared)
+			expectedAllocatable: 2, // 2 allocatable devices `device-1`, `device-2`
+			expectedAllocated:   1, // 1 allocated (shared) by `testClaim`
 		},
 		"DRA-backed-resource-multiple-devices-mixed-allocation": {
 			enableDRAExtendedResource: true,
@@ -437,8 +437,8 @@ func TestCalculateResourceAllocatableRequest(t *testing.T) {
 					Obj(),
 				// device-3 remains unallocated
 			},
-			expectedAllocatable: 3,
-			expectedAllocated:   2, // 2 allocated (1 full + 1 shared)
+			expectedAllocatable: 3, // 3 allocatable devices `device-1`, `device-2`, `device-3`
+			expectedAllocated:   2, // 2 allocated (1 full `test-claim-1` + 1 shared `test-claim-2`)
 		},
 		"DRA-backed-resource-with-per-device-node-selection": {
 			enableDRAExtendedResource: true,
@@ -522,7 +522,7 @@ func TestCalculateResourceAllocatableRequest(t *testing.T) {
 					Obj(),
 			},
 			expectedAllocatable: 2, // Only device-1 (matches test-node) and device-3 (matches all nodes)
-			expectedAllocated:   1, // 1 allocated (device-1)
+			expectedAllocated:   1, // 1 allocated (device-1) by `testClaim`
 		},
 	}
 
@@ -596,10 +596,10 @@ func TestCalculateResourceAllocatableRequest(t *testing.T) {
 			// Test calculateResourceAllocatableRequest API
 			allocatable, allocated := scorer.calculateResourceAllocatableRequest(tCtx, nodeInfo, tc.extendedResource, draPreScoreState)
 			if !cmp.Equal(allocatable, tc.expectedAllocatable) {
-				t.Errorf("Expected allocatable=%v, but got allocatable=%v", tc.expectedAllocatable, allocatable)
+				t.Errorf("Expected allocatable=%v, but got %v", tc.expectedAllocatable, allocatable)
 			}
 			if !cmp.Equal(allocated, tc.expectedAllocated) {
-				t.Errorf("Expected allocated=%v, but got allocated=%v", tc.expectedAllocated, allocated)
+				t.Errorf("Expected allocated=%v, but got %v", tc.expectedAllocated, allocated)
 			}
 		})
 	}
