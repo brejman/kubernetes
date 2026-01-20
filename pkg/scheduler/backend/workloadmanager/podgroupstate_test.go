@@ -25,8 +25,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-func TestPodGroupInfo_AssumeForget(t *testing.T) {
-	pgi := newPodGroupInfo()
+func TestPodGroupState_AssumeForget(t *testing.T) {
+	pgi := newPodGroupState()
 	pod := st.MakePod().Namespace("ns1").Name("p1").UID("p1").
 		WorkloadRef(&v1.WorkloadReference{Name: "w1", PodGroup: "pg1"}).Obj()
 
@@ -55,8 +55,8 @@ func TestPodGroupInfo_AssumeForget(t *testing.T) {
 	}
 }
 
-func TestPodGroupInfo_SchedulingTimeout(t *testing.T) {
-	pgi := newPodGroupInfo()
+func TestPodGroupState_SchedulingTimeout(t *testing.T) {
+	pgi := newPodGroupState()
 
 	timeout := pgi.SchedulingTimeout()
 	if pgi.schedulingDeadline == nil {
