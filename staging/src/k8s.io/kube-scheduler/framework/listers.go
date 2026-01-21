@@ -151,6 +151,9 @@ type CSIManager interface {
 type WorkloadManager interface {
 	// PodGroupState retrieves the runtime state for a specific pod group, identified by workload's namespace and reference.
 	PodGroupState(namespace string, workloadRef *v1.WorkloadReference) (PodGroupState, error)
+	// AssignedPodsSnapshot returns the assigned (bound) pods at the moment the snapshot was taken.
+	// Snapshot is taken at the beginning of the scheduling cycle
+	AssignedPodsSnapshot(namespace string, workloadRef *v1.WorkloadReference) ([]*v1.Pod, error)
 }
 
 // PodGroupInfo provides an interface to view and modify the state of a single pod group.

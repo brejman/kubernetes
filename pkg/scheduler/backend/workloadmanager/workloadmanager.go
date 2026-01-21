@@ -38,6 +38,8 @@ type WorkloadManager interface {
 	UpdatePod(oldPod, newPod *v1.Pod)
 	// DeletePod is called by the scheduler when a Pod/Delete event is observed.
 	DeletePod(pod *v1.Pod)
+	// UpdateSnapshot takes the snapshot of the currently assigned pods.
+	UpdateSnapshot()
 }
 
 // workloadManager is the concrete implementation of the WorkloadManager.
@@ -45,7 +47,8 @@ type workloadManager struct {
 	lock sync.RWMutex
 
 	// podGroupStates stores the runtime state for each known pod group.
-	podGroupStates map[podGroupKey]*podGroupState
+	podGroupStates       map[podGroupKey]*podGroupState
+	assignedPodsSnapshot map[podGroupKey][]*v1.Pod
 }
 
 // New initializes a new workload manager and returns it.
@@ -126,4 +129,25 @@ func (wm *workloadManager) PodGroupState(namespace string, workloadRef *v1.Workl
 		return nil, fmt.Errorf("internal pod group state doesn't exist for a pod's workload")
 	}
 	return state, nil
+}
+
+func (wm *workloadManager) AssignedPodsSnapshot(namespace string, workloadRef *v1.WorkloadReference) ([]*v1.Pod, error) {
+	return wm.assignedPodsSnapshot[newPodGroupKey(namespace, workloadRef)], nil
+}
+
+func (wm *workloadManager) UpdateSnapshot() {
+	wm.lock.RLock()
+	defer wm.lock.RUnlock()
+
+	wm.assignedPodsSnapshot = make(map[podGroupKey][]*v1.Pod)
+	for key, state := range wm.podGroupStates {
+		for uid := range state.assignedPods {
+			pod, ok := state.allPods[uid]
+			if !ok {
+				// Shouldn't happen, but handling this case gracefully.
+				continue
+			}
+			wm.assignedPodsSnapshot[key] = append(wm.assignedPodsSnapshot[key], pod)
+		}
+	}
 }
