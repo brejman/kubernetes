@@ -397,8 +397,8 @@ func TestNewSnapshot(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			snapshot := NewSnapshot(test.pods, test.nodes)
 
-			if test.expectedNumNodes != snapshot.NumNodes() {
-				t.Errorf("unexpected number of nodes, want: %v, got: %v", test.expectedNumNodes, snapshot.NumNodes())
+			if test.expectedNumNodes != snapshot.NumNodesInPlacement() {
+				t.Errorf("unexpected number of nodes, want: %v, got: %v", test.expectedNumNodes, snapshot.NumNodesInPlacement())
 			}
 
 			for i, node := range test.nodes {

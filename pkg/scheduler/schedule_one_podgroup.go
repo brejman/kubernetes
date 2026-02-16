@@ -215,7 +215,7 @@ func (sched *Scheduler) podGroupCycle(ctx context.Context, schedFwk framework.Fr
 		return
 	}
 
-	result := sched.podGroupSchedulingDefaultAlgorithm(podGroupCycleCtx, schedFwk, podGroupInfo)
+	result := sched.podGroupSchedulingCycle(podGroupCycleCtx, schedFwk, podGroupInfo)
 	metrics.PodGroupSchedulingAlgorithmLatency.Observe(metrics.SinceInSeconds(start))
 
 	// submitPodGroupAlgorithmResult can dispatch binding goroutines, so should be called with the noncancelable ctx.
@@ -463,4 +463,74 @@ func (sched *Scheduler) submitPodGroupAlgorithmResult(ctx context.Context, sched
 		logger.V(2).Info("Pod group requires preemption, initiated", "podGroup", klog.KObj(podGroupInfo), "unschedulablePods", unschedulablePods)
 		metrics.PodGroupUnschedulable(schedFwk.ProfileName(), metrics.SinceInSeconds(start))
 	}
+}
+
+func (s *Scheduler) selectPlacementResult(results []placementResult) *podGroupAlgorithmResult {
+	// TODO: https://github.com/kubernetes/enhancements/issues/5732 - loop over placement scorer plugins
+	return &results[0].podGroupAlgorithmResult
+}
+
+type placementResult struct {
+	podGroupAlgorithmResult
+	placement *fwk.PlacementInfo
+}
+
+func (sched *Scheduler) podGroupSchedulingCycle(ctx context.Context, schedFwk framework.Framework, podGroupInfo *framework.QueuedPodGroupInfo) podGroupAlgorithmResult {
+	allNodes, err := sched.nodeInfoSnapshot.NodeInfos().List()
+	if err != nil {
+		return sched.podGroupAlgorithmFailure(ctx, podGroupInfo, fwk.AsStatus(err))
+	}
+
+	podGroupCycleState := framework.NewCycleState()
+
+	placements, status := schedFwk.RunPlacementGeneratorPlugins(ctx, podGroupCycleState, podGroupInfo.PodGroupInfo, []*fwk.PlacementInfo{
+		{
+			Placement: fwk.Placement{
+				NodeSelector: &v1.NodeSelector{},
+			},
+			PlacementNodes: allNodes,
+		},
+	})
+	if !status.IsSuccess() {
+		return sched.podGroupAlgorithmFailure(ctx, podGroupInfo, status)
+	}
+	if len(placements) == 0 {
+		return sched.podGroupAlgorithmFailure(ctx, podGroupInfo, fwk.NewStatus(fwk.Unschedulable, "no placement found"))
+	}
+
+	results := make([]placementResult, len(placements))
+
+	for i, placement := range placements {
+		sched.nodeInfoSnapshot.SetPlacement(placement)
+		result := sched.podGroupSchedulingDefaultAlgorithm(ctx, schedFwk, podGroupInfo)
+		sched.nodeInfoSnapshot.UnsetPlacement()
+
+		results[i] = placementResult{
+			podGroupAlgorithmResult: result,
+			placement:               placement,
+		}
+	}
+
+	if len(results) == 0 {
+		return sched.podGroupAlgorithmFailure(ctx, podGroupInfo, fwk.NewStatus(fwk.Unschedulable, "no feasible placement found"))
+
+	}
+
+	result := sched.selectPlacementResult(results)
+
+	return *result
+}
+
+// podGroupAlgorithmFailure creates podGroupAlgorithmResult in cases where a podgroup-wide error ocurred.
+func (sched *Scheduler) podGroupAlgorithmFailure(ctx context.Context, podGroupInfo *framework.QueuedPodGroupInfo, status *fwk.Status) podGroupAlgorithmResult {
+	schedulingResult := podGroupAlgorithmResult{
+		status: podGroupUnschedulable,
+	}
+	for _, podInfo := range podGroupInfo.QueuedPodInfos {
+		schedulingResult.podResults = append(schedulingResult.podResults, algorithmResult{
+			podCtx: sched.initPodSchedulingContext(ctx, podInfo.Pod),
+			status: status,
+		})
+	}
+	return schedulingResult
 }

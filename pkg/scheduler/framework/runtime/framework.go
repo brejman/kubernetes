@@ -1852,6 +1852,12 @@ func (f *frameworkImpl) runPermitPlugin(ctx context.Context, pl fwk.PermitPlugin
 	return status, timeout
 }
 
+// RunPlacementGeneratorPlugins runs the set of configured PlacementGenerator plugins.
+func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, initialParents []*fwk.PlacementInfo) ([]*fwk.PlacementInfo, *fwk.Status) {
+	// TODO: https://github.com/kubernetes/enhancements/issues/5732 - loop over placement generator plugins
+	return initialParents, nil
+}
+
 func (f *frameworkImpl) WillWaitOnPermit(ctx context.Context, pod *v1.Pod) bool {
 	return f.waitingPods.get(pod.UID) != nil
 }
