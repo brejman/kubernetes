@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,6 +42,7 @@ import (
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/backend/queue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
+	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	"k8s.io/utils/ptr"
 )
 
@@ -3976,4 +3978,302 @@ func BuildNodeInfos(nodes []*v1.Node) []fwk.NodeInfo {
 		res[i].SetNode(nodes[i])
 	}
 	return res
+}
+
+type simplifiedGeneratorPlugin struct {
+	assertState func(t *testing.T, parentPlacements []*fwk.PlacementInfo)
+	selectors   []*v1.NodeSelector
+	status      *fwk.Status
+}
+
+type testPlacementGeneratorPlugin struct {
+	simplifiedGeneratorPlugin
+	name string
+	t    *testing.T
+}
+
+func (p *testPlacementGeneratorPlugin) Name() string {
+	return p.name
+}
+
+func (p *testPlacementGeneratorPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacements []*fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
+	if p.assertState != nil {
+		p.assertState(p.t, parentPlacements)
+	}
+	if p.selectors != nil {
+		placements := make([]*fwk.Placement, len(p.selectors))
+		for i := range p.selectors {
+			placements[i] = &fwk.Placement{
+				NodeSelector: p.selectors[i],
+			}
+		}
+		return placements, p.status
+	}
+	childPlacements := make([]*fwk.Placement, len(parentPlacements))
+	for i := range parentPlacements {
+		childPlacements[i] = &parentPlacements[i].Placement
+	}
+	return childPlacements, p.status
+}
+
+func TestRunPlacementGeneratorPlugins(t *testing.T) {
+	// This plugin will simply return the parent placements without any modification
+	forwardingPlugin := simplifiedGeneratorPlugin{}
+
+	tests := []struct {
+		name              string
+		plugins           []simplifiedGeneratorPlugin
+		nodes             []*v1.Node
+		initialPlacements [][]string
+		wantPlacements    [][]string
+		wantStatusCode    fwk.Code
+	}{
+		{
+			name:    "Returns initial parents if no plugins provided",
+			plugins: []simplifiedGeneratorPlugin{},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantStatusCode: fwk.Success,
+		},
+		{
+			name: "Does not run plugins if no parents provided",
+			plugins: []simplifiedGeneratorPlugin{
+				{
+					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
+						t.Fatal("Unexpected call to plugin")
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
+			},
+			initialPlacements: [][]string{},
+			wantPlacements:    [][]string{},
+			wantStatusCode:    fwk.Success,
+		},
+		{
+			name: "Passes placements from the previous plugin to the next one",
+			plugins: []simplifiedGeneratorPlugin{
+				{
+					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
+						if len(parentPlacements) != 1 {
+							t.Fatalf("Expected 1 initial parent placement, got %d", len(parentPlacements))
+						}
+					},
+					selectors: []*v1.NodeSelector{
+						makeNodeSelector(map[string]string{"k1": "v1"}),
+						makeNodeSelector(map[string]string{"k1": "v2"}),
+					},
+				},
+				{
+					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
+						if len(parentPlacements) != 2 {
+							t.Fatalf("Expected 2 parent placements from the previous plugin, got %d", len(parentPlacements))
+						}
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantPlacements: [][]string{
+				{"node1", "node2"}, {"node3"},
+			},
+			wantStatusCode: fwk.Success,
+		},
+		{
+			name: "Limits the nodes if they don't match any selector",
+			plugins: []simplifiedGeneratorPlugin{
+				{
+					selectors: []*v1.NodeSelector{
+						makeNodeSelector(map[string]string{"k1": "v1"}),
+					},
+				},
+				{
+					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
+						if len(parentPlacements) != 1 {
+							t.Fatalf("Expected 1 parent placements from the previous plugin, got %d", len(parentPlacements))
+						}
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantPlacements: [][]string{
+				{"node1", "node2"},
+			},
+			wantStatusCode: fwk.Success,
+		},
+		{
+			name: "Stops when one plugin fails",
+			plugins: []simplifiedGeneratorPlugin{
+				forwardingPlugin,
+				{
+					status: fwk.NewStatus(fwk.Unschedulable, "failure"),
+				},
+				{
+					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
+						t.Fatal("Unexpected call to plugin")
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantStatusCode: fwk.Unschedulable,
+		},
+		{
+			name: "Propagates non-empty placements to other plugins",
+			plugins: []simplifiedGeneratorPlugin{
+				{
+					selectors: []*v1.NodeSelector{
+						makeNodeSelector(map[string]string{"k1": "v1"}),
+						makeNodeSelector(map[string]string{"k1": "v2"}),
+						makeNodeSelector(map[string]string{"k1": "v3"}),
+					},
+				},
+				{
+					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
+						if len(parentPlacements) != 2 {
+							t.Fatalf("Expected 2 parent placements from the previous plugin, got %d", len(parentPlacements))
+						}
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantPlacements: [][]string{
+				{"node1", "node2"}, {"node3"},
+			},
+			wantStatusCode: fwk.Success,
+		},
+		{
+			name: "Returns empty array when one plugin returns empty array",
+			plugins: []simplifiedGeneratorPlugin{
+				forwardingPlugin,
+				{
+					selectors: make([]*v1.NodeSelector, 0),
+				},
+				{
+					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
+						t.Fatal("Unexpected call to plugin")
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantPlacements: [][]string{},
+			wantStatusCode: fwk.Success,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, ctx := ktesting.NewTestContext(t)
+			r := make(Registry)
+			plugins := make([]config.Plugin, 0)
+			for i, p := range tt.plugins {
+				pluginName := fmt.Sprintf("plugin-%d", i)
+				plugins = append(plugins, config.Plugin{Name: pluginName})
+				r.Register(fmt.Sprintf("plugin-%d", i), func(ctx context.Context, _ runtime.Object, fh fwk.Handle) (fwk.Plugin, error) {
+					return &testPlacementGeneratorPlugin{
+						simplifiedGeneratorPlugin: p,
+						name:                      pluginName,
+						t:                         t,
+					}, nil
+				})
+			}
+			profile := config.KubeSchedulerProfile{Plugins: &config.Plugins{PlacementGenerate: config.PluginSet{Enabled: plugins}}}
+			fw, err := newFrameworkWithQueueSortAndBind(ctx, r, profile, WithSnapshotSharedLister(cache.NewEmptySnapshot()))
+			if err != nil {
+				t.Fatalf("Unexpected error during calling NewFramework, got %v", err)
+			}
+			nodes := make(map[string]fwk.NodeInfo)
+			for _, node := range tt.nodes {
+				nodes[node.Name] = framework.NewNodeInfo()
+				nodes[node.Name].SetNode(node)
+			}
+
+			initialPlacements := make([]*fwk.PlacementInfo, 0)
+			for _, placement := range tt.initialPlacements {
+				initialPlacement := &fwk.PlacementInfo{}
+				for _, node := range placement {
+					initialPlacement.PlacementNodes = append(initialPlacement.PlacementNodes, nodes[node])
+				}
+				initialPlacements = append(initialPlacements, initialPlacement)
+			}
+
+			result, status := fw.RunPlacementGeneratorPlugins(ctx, framework.NewCycleState(), nil, initialPlacements)
+			if status.Code() != tt.wantStatusCode {
+				t.Errorf("Unexpected status code, got %v, want %v", status.Code(), tt.wantStatusCode)
+			}
+			gotPlacements := make([][]string, 0)
+			for _, placement := range result {
+				placementNodes := make([]string, 0)
+				for _, node := range placement.PlacementNodes {
+					placementNodes = append(placementNodes, node.Node().Name)
+				}
+				gotPlacements = append(gotPlacements, placementNodes)
+			}
+			if diff := cmp.Diff(tt.wantPlacements, gotPlacements, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("Unexpected plugins (-want,+got):\n%s", diff)
+			}
+		})
+	}
+}
+
+func makeNodeSelector(labelTerms ...map[string]string) *v1.NodeSelector {
+	selector := &v1.NodeSelector{}
+	for _, term := range labelTerms {
+		selectorTerm := v1.NodeSelectorTerm{}
+		for k, v := range term {
+			selectorTerm.MatchExpressions = []v1.NodeSelectorRequirement{
+				{
+					Key:      k,
+					Operator: v1.NodeSelectorOpIn,
+					Values:   []string{v},
+				},
+			}
+		}
+		selector.NodeSelectorTerms = append(selector.NodeSelectorTerms, selectorTerm)
+	}
+	return selector
 }
