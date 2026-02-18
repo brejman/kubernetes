@@ -21,6 +21,10 @@ package framework
 // PodGroupCycleState does not provide any data protection, as all plugins are assumed to be
 // trusted.
 type PodGroupCycleState interface {
+	// ShouldRecordPluginMetrics returns whether metrics.PluginExecutionDuration metrics
+	// should be recorded.
+	// This function is mostly for the scheduling framework runtime, plugins usually don't have to use it.
+	ShouldRecordPluginMetrics() bool
 	// Read retrieves data with the given "key" from PodGroupCycleState. If the key is not
 	// present, ErrNotFound is returned.
 	//
