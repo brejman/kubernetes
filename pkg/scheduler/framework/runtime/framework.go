@@ -1867,7 +1867,10 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 	for _, pl := range f.placementGeneratePlugins {
 		placements, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, currentParents)
 		if !status.IsSuccess() {
-			return nil, status
+			if status.IsRejected() {
+				return nil, status
+			}
+			return nil, fwk.AsStatus(fmt.Errorf("running PlacementGenerate plugin %q: %w", pl.Name(), status.AsError())).WithPlugin(pl.Name())
 		}
 
 		// Optimization: The new nodes MUST be a subset of the previous parent's nodes.
@@ -1876,7 +1879,10 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 
 		var nextParents []*fwk.PlacementInfo
 		for _, p := range placements {
-			matchingNodes := filterNodesMatchingSelector(sourceNodes, p.NodeSelector)
+			matchingNodes, err := filterNodesMatchingSelector(sourceNodes, p.NodeSelector)
+			if err != nil {
+				return nil, fwk.AsStatus(fmt.Errorf("invalid selector from plugin %q: %w", pl.Name(), err)).WithPlugin(pl.Name())
+			}
 
 			// Only propagate placements that actually have feasible nodes
 			if len(matchingNodes) > 0 {
@@ -1924,16 +1930,16 @@ func getAllNodesFromParents(parents []*fwk.PlacementInfo) []fwk.NodeInfo {
 	return result
 }
 
-func filterNodesMatchingSelector(nodes []fwk.NodeInfo, selector *v1.NodeSelector) []fwk.NodeInfo {
+func filterNodesMatchingSelector(nodes []fwk.NodeInfo, selector *v1.NodeSelector) ([]fwk.NodeInfo, error) {
 	if selector == nil {
-		return nodes // Match all
+		return nodes, nil // Match all
 	}
 
 	// Parse the API NodeSelector into a helper object that supports matching
 	ns, err := nodeaffinity.NewNodeSelector(selector)
 	if err != nil {
 		// If the selector is invalid, it matches no nodes.
-		return nil
+		return nil, err
 	}
 
 	var matches []fwk.NodeInfo
@@ -1942,7 +1948,7 @@ func filterNodesMatchingSelector(nodes []fwk.NodeInfo, selector *v1.NodeSelector
 			matches = append(matches, node)
 		}
 	}
-	return matches
+	return matches, nil
 }
 
 func (f *frameworkImpl) WillWaitOnPermit(ctx context.Context, pod *v1.Pod) bool {
