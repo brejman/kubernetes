@@ -1865,10 +1865,10 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 	currentParents := initialParents
 
 	for _, pl := range f.placementGeneratePlugins {
-		placements, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, currentParents)
+		proposedPlacements, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, currentParents)
 		if !status.IsSuccess() {
 			if status.IsRejected() {
-				return nil, status
+				return nil, status.WithPlugin(pl.Name())
 			}
 			return nil, fwk.AsStatus(fmt.Errorf("running PlacementGenerate plugin %q: %w", pl.Name(), status.AsError())).WithPlugin(pl.Name())
 		}
@@ -1878,7 +1878,7 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 		sourceNodes := getAllNodesFromParents(currentParents)
 
 		var nextParents []*fwk.PlacementInfo
-		for _, p := range placements {
+		for _, p := range proposedPlacements {
 			matchingNodes, err := filterNodesMatchingSelector(sourceNodes, p.NodeSelector)
 			if err != nil {
 				return nil, fwk.AsStatus(fmt.Errorf("invalid selector from plugin %q: %w", pl.Name(), err)).WithPlugin(pl.Name())

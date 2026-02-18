@@ -718,15 +718,13 @@ type SignPlugin interface {
 }
 
 // PlacementGeneratorPlugin is an interface for plugins that generate candidate Placements.
-// Plugins implemeting PlacementGeneratorPlugin interface should also implement
-// EnqueueExtensions interface.
 type PlacementGeneratorPlugin interface {
 	Plugin
 
 	// GeneratePlacements generates a list of potential Placements for the given PodGroup.
 	// Each Placement represents a candidate set of resources (e.g., nodes matching a selector)
 	// and potential DRA allocations where the PodGroup might be scheduled.
-	// This runs in Phase 1 of the Workload Scheduling Cycle.
+	// This runs in Phase 1 of the pod group scheduling cycle.
 	GeneratePlacements(ctx context.Context, state PodGroupCycleState, podGroup PodGroupInfo, parentPlacements []*PlacementInfo) ([]*Placement, *Status)
 }
 
