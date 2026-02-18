@@ -1865,31 +1865,32 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 	currentParents := initialParents
 
 	for _, pl := range f.placementGeneratePlugins {
-		proposedPlacements, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, currentParents)
-		if !status.IsSuccess() {
-			if status.IsRejected() {
-				return nil, status.WithPlugin(pl.Name())
-			}
-			return nil, fwk.AsStatus(fmt.Errorf("running PlacementGenerate plugin %q: %w", pl.Name(), status.AsError())).WithPlugin(pl.Name())
-		}
-
-		// Optimization: The new nodes MUST be a subset of the previous parent's nodes.
-		// We collect all available nodes from the current parents to narrow the search.
-		sourceNodes := getAllNodesFromParents(currentParents)
-
 		var nextParents []*fwk.PlacementInfo
-		for _, p := range proposedPlacements {
-			matchingNodes, err := filterNodesMatchingSelector(sourceNodes, p.NodeSelector)
-			if err != nil {
-				return nil, fwk.AsStatus(fmt.Errorf("invalid selector from plugin %q: %w", pl.Name(), err)).WithPlugin(pl.Name())
+		for _, parent := range currentParents {
+			proposedPlacements, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, parent)
+
+			if !status.IsSuccess() {
+				if status.IsRejected() {
+					return nil, status.WithPlugin(pl.Name())
+				}
+				return nil, fwk.AsStatus(fmt.Errorf("running PlacementGenerate plugin %q: %w", pl.Name(), status.AsError())).WithPlugin(pl.Name())
 			}
 
-			// Only propagate placements that actually have feasible nodes
-			if len(matchingNodes) > 0 {
-				nextParents = append(nextParents, &fwk.PlacementInfo{
-					Placement:      *p,
-					PlacementNodes: matchingNodes,
-				})
+			for _, p := range proposedPlacements {
+				matchingNodes, err := filterNodesMatchingSelector(parent.PlacementNodes, p.NodeSelector)
+				if err != nil {
+					return nil, fwk.AsStatus(fmt.Errorf("invalid selector from plugin %q: %w", pl.Name(), err)).WithPlugin(pl.Name())
+				}
+
+				// Only propagate placements that actually have feasible nodes
+				if len(matchingNodes) > 0 {
+					nextParents = append(nextParents, &fwk.PlacementInfo{
+						Placement: fwk.Placement{
+							NodeSelector: mergeSelectors(parent.NodeSelector, p.NodeSelector),
+						},
+						PlacementNodes: matchingNodes,
+					})
+				}
 			}
 		}
 
@@ -1904,34 +1905,56 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 	return currentParents, nil
 }
 
-func (f *frameworkImpl) runPlacementGeneratorPlugin(ctx context.Context, pl fwk.PlacementGeneratorPlugin, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacements []*fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
+func (f *frameworkImpl) runPlacementGeneratorPlugin(ctx context.Context, pl fwk.PlacementGeneratorPlugin, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
 	if !state.ShouldRecordPluginMetrics() {
-		return pl.GeneratePlacements(ctx, state, podGroup, parentPlacements)
+		return pl.GeneratePlacements(ctx, state, podGroup, parentPlacement)
 	}
 	startTime := time.Now()
-	placements, status := pl.GeneratePlacements(ctx, state, podGroup, parentPlacements)
+	placements, status := pl.GeneratePlacements(ctx, state, podGroup, parentPlacement)
 	f.metricsRecorder.ObservePluginDurationAsync(metrics.PlacementGenerate, pl.Name(), status.Code().String(), metrics.SinceInSeconds(startTime))
 	return placements, status
 }
 
-func getAllNodesFromParents(parents []*fwk.PlacementInfo) []fwk.NodeInfo {
-	// Use a map to deduplicate if parents overlap
-	seen := sets.NewString()
-	var result []fwk.NodeInfo
+func mergeSelectors(s1, s2 *v1.NodeSelector) *v1.NodeSelector {
+	if s1 == nil {
+		return s2.DeepCopy()
+	}
+	if s2 == nil {
+		return s1.DeepCopy()
+	}
 
-	for _, p := range parents {
-		for _, node := range p.PlacementNodes {
-			if !seen.Has(node.Node().Name) {
-				seen.Insert(node.Node().Name)
-				result = append(result, node)
+	if len(s1.NodeSelectorTerms) == 0 {
+		return s2.DeepCopy()
+	}
+	if len(s2.NodeSelectorTerms) == 0 {
+		return s1.DeepCopy()
+	}
+
+	newTerms := []v1.NodeSelectorTerm{}
+
+	for _, t1 := range s1.NodeSelectorTerms {
+		for _, t2 := range s2.NodeSelectorTerms {
+			newTerm := v1.NodeSelectorTerm{
+				MatchExpressions: append(
+					append([]v1.NodeSelectorRequirement{}, t1.MatchExpressions...),
+					t2.MatchExpressions...,
+				),
+				MatchFields: append(
+					append([]v1.NodeSelectorRequirement{}, t1.MatchFields...),
+					t2.MatchFields...,
+				),
 			}
+			newTerms = append(newTerms, newTerm)
 		}
 	}
-	return result
+
+	return &v1.NodeSelector{
+		NodeSelectorTerms: newTerms,
+	}
 }
 
 func filterNodesMatchingSelector(nodes []fwk.NodeInfo, selector *v1.NodeSelector) ([]fwk.NodeInfo, error) {
-	if selector == nil {
+	if selector == nil || len(selector.NodeSelectorTerms) == 0 {
 		return nodes, nil // Match all
 	}
 

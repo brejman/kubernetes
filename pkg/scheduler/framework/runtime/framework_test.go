@@ -256,7 +256,7 @@ func (pl *TestPlugin) Bind(ctx context.Context, state fwk.CycleState, p *v1.Pod,
 	return fwk.NewStatus(fwk.Code(pl.inj.BindStatus), injectReason)
 }
 
-func (pl *TestPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacements []*fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
+func (pl *TestPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
 	return pl.inj.GeneratePlacementsResult, fwk.NewStatus(fwk.Code(pl.inj.GeneratePlacementsStatus), injectReason)
 }
 
@@ -4013,7 +4013,8 @@ func BuildNodeInfos(nodes []*v1.Node) []fwk.NodeInfo {
 }
 
 type simplifiedGeneratorPlugin struct {
-	assertState func(t *testing.T, parentPlacements []*fwk.PlacementInfo)
+	parents     []*fwk.PlacementInfo
+	assertState func(t *testing.T, parentPlacement []*fwk.PlacementInfo)
 	selectors   []*v1.NodeSelector
 	status      *fwk.Status
 }
@@ -4021,17 +4022,15 @@ type simplifiedGeneratorPlugin struct {
 type testPlacementGeneratorPlugin struct {
 	simplifiedGeneratorPlugin
 	name string
-	t    *testing.T
 }
 
 func (p *testPlacementGeneratorPlugin) Name() string {
 	return p.name
 }
 
-func (p *testPlacementGeneratorPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacements []*fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
-	if p.assertState != nil {
-		p.assertState(p.t, parentPlacements)
-	}
+func (p *testPlacementGeneratorPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
+	p.parents = append(p.parents, parentPlacement)
+
 	if p.selectors != nil {
 		placements := make([]*fwk.Placement, len(p.selectors))
 		for i := range p.selectors {
@@ -4041,11 +4040,13 @@ func (p *testPlacementGeneratorPlugin) GeneratePlacements(ctx context.Context, s
 		}
 		return placements, p.status
 	}
-	childPlacements := make([]*fwk.Placement, len(parentPlacements))
-	for i := range parentPlacements {
-		childPlacements[i] = &parentPlacements[i].Placement
+	return []*fwk.Placement{&parentPlacement.Placement}, p.status
+}
+
+func (p *testPlacementGeneratorPlugin) assertState(t *testing.T) {
+	if p.simplifiedGeneratorPlugin.assertState != nil {
+		p.simplifiedGeneratorPlugin.assertState(t, p.parents)
 	}
-	return childPlacements, p.status
 }
 
 func TestRunPlacementGeneratorPlugins(t *testing.T) {
@@ -4081,7 +4082,9 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 			plugins: []simplifiedGeneratorPlugin{
 				{
 					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
-						t.Fatal("Unexpected call to plugin")
+						if len(parentPlacements) != 0 {
+							t.Fatal("Unexpected call to plugin")
+						}
 					},
 				},
 			},
@@ -4167,7 +4170,9 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 				},
 				{
 					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
-						t.Fatal("Unexpected call to plugin")
+						if len(parentPlacements) != 0 {
+							t.Fatal("Unexpected call to plugin")
+						}
 					},
 				},
 			},
@@ -4221,7 +4226,9 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 				},
 				{
 					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
-						t.Fatal("Unexpected call to plugin")
+						if len(parentPlacements) != 0 {
+							t.Fatal("Unexpected call to plugin")
+						}
 					},
 				},
 			},
@@ -4274,8 +4281,7 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 				},
 				{
 					selectors: []*v1.NodeSelector{
-						makeNodeSelector(map[string]string{"k1": "v1", "k2": "v1"}),
-						makeNodeSelector(map[string]string{"k1": "v2", "k2": "v1"}),
+						makeNodeSelector(map[string]string{"k2": "v1"}),
 					},
 				},
 			},
@@ -4292,24 +4298,53 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 			},
 			wantStatusCode: fwk.Success,
 		},
+		{
+			name: "Merges multiple terms",
+			plugins: []simplifiedGeneratorPlugin{
+				{
+					selectors: []*v1.NodeSelector{
+						makeNodeSelector(map[string]string{"k1": "v1"}, map[string]string{"k2": "v1"}),
+						makeNodeSelector(map[string]string{"k1": "v2"}),
+					},
+				},
+				{
+					selectors: []*v1.NodeSelector{
+						makeNodeSelector(map[string]string{"k2": "v1"}),
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k2", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Label("k2", "v1").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantPlacements: [][]string{
+				{"node2", "node3"}, {"node3"},
+			},
+			wantStatusCode: fwk.Success,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, ctx := ktesting.NewTestContext(t)
 			r := make(Registry)
-			plugins := make([]config.Plugin, 0)
+			pluginSet := config.PluginSet{}
+			plugins := make([]*testPlacementGeneratorPlugin, len(tt.plugins))
 			for i, p := range tt.plugins {
 				pluginName := fmt.Sprintf("plugin-%d", i)
-				plugins = append(plugins, config.Plugin{Name: pluginName})
+				pluginSet.Enabled = append(pluginSet.Enabled, config.Plugin{Name: pluginName})
+				plugins[i] = &testPlacementGeneratorPlugin{
+					simplifiedGeneratorPlugin: p,
+					name:                      pluginName,
+				}
 				r.Register(fmt.Sprintf("plugin-%d", i), func(ctx context.Context, _ runtime.Object, fh fwk.Handle) (fwk.Plugin, error) {
-					return &testPlacementGeneratorPlugin{
-						simplifiedGeneratorPlugin: p,
-						name:                      pluginName,
-						t:                         t,
-					}, nil
+					return plugins[i], nil
 				})
 			}
-			profile := config.KubeSchedulerProfile{Plugins: &config.Plugins{PlacementGenerate: config.PluginSet{Enabled: plugins}}}
+			profile := config.KubeSchedulerProfile{Plugins: &config.Plugins{PlacementGenerate: pluginSet}}
 			fw, err := newFrameworkWithQueueSortAndBind(ctx, r, profile, WithSnapshotSharedLister(cache.NewEmptySnapshot()))
 			if err != nil {
 				t.Fatalf("Unexpected error during calling NewFramework, got %v", err)
@@ -4330,6 +4365,11 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 			}
 
 			result, status := fw.RunPlacementGeneratorPlugins(ctx, framework.NewCycleState(), nil, initialPlacements)
+
+			for _, plugin := range plugins {
+				plugin.assertState(t)
+			}
+
 			if status.Code() != tt.wantStatusCode {
 				t.Errorf("Unexpected status code, got %v, want %v", status.Code(), tt.wantStatusCode)
 			}
@@ -4342,7 +4382,7 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 				gotPlacements = append(gotPlacements, placementNodes)
 			}
 			if diff := cmp.Diff(tt.wantPlacements, gotPlacements, cmpopts.EquateEmpty()); diff != "" {
-				t.Errorf("Unexpected plugins (-want,+got):\n%s", diff)
+				t.Errorf("Unexpected placements (-want,+got):\n%s", diff)
 			}
 		})
 	}
