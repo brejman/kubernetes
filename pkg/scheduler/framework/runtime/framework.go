@@ -1859,21 +1859,16 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 		metrics.FrameworkExtensionPointDuration.WithLabelValues(metrics.PlacementGenerate, status.Code().String(), f.profileName).Observe(metrics.SinceInSeconds(startTime))
 	}()
 
-	currentParents := initialParents
-
 	if len(initialParents) == 0 {
 		return initialParents, nil
 	}
+	currentParents := initialParents
 
 	for _, pl := range f.placementGeneratePlugins {
 		placements, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, currentParents)
-		if status != nil && !status.IsSuccess() {
+		if !status.IsSuccess() {
 			return nil, status
 		}
-
-		// B. Prepare 'currentParents' for the next plugin.
-		// We must convert the generated []*Placement into []*ParentPlacement.
-		// This involves finding which nodes actually match the new placements.
 
 		// Optimization: The new nodes MUST be a subset of the previous parent's nodes.
 		// We collect all available nodes from the current parents to narrow the search.
@@ -1881,7 +1876,6 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 
 		var nextParents []*fwk.PlacementInfo
 		for _, p := range placements {
-			// Find nodes that match this placement's selector
 			matchingNodes := filterNodesMatchingSelector(sourceNodes, p.NodeSelector)
 
 			// Only propagate placements that actually have feasible nodes
@@ -1914,7 +1908,6 @@ func (f *frameworkImpl) runPlacementGeneratorPlugin(ctx context.Context, pl fwk.
 	return placements, status
 }
 
-// Helper: Collects distinct nodes from a list of ParentPlacements
 func getAllNodesFromParents(parents []*fwk.PlacementInfo) []fwk.NodeInfo {
 	// Use a map to deduplicate if parents overlap
 	seen := sets.NewString()
@@ -1931,7 +1924,6 @@ func getAllNodesFromParents(parents []*fwk.PlacementInfo) []fwk.NodeInfo {
 	return result
 }
 
-// Helper: Filter nodes that match the given NodeSelector
 func filterNodesMatchingSelector(nodes []fwk.NodeInfo, selector *v1.NodeSelector) []fwk.NodeInfo {
 	if selector == nil {
 		return nodes // Match all

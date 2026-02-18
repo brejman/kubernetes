@@ -657,12 +657,8 @@ type PodGroupInfo interface {
 // in the best pod assignments.
 type Placement struct {
 	// NodeSelector specifies the node constraints for this Placement.
-	// For Topology this is derived from topology labels (e.g., all nodes with label
+	// For Topology this is derived from topology labels (e.g. all nodes with label
 	// 'topology-rack: rack-1').
-	// For DRA, this selector would be constructed based on nodeSelector from
-	// DRA's AllocationResult from DRAAllocations.
-	// All pods within the PodGroup, when being evaluated against this Placement,
-	// are restricted to the nodes matching this NodeSelector.
 	NodeSelector *v1.NodeSelector
 }
 
