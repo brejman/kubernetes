@@ -4236,6 +4236,62 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 			wantPlacements: [][]string{},
 			wantStatusCode: fwk.Success,
 		},
+		{
+			name: "Matches all nodes with nil selector",
+			plugins: []simplifiedGeneratorPlugin{
+				{
+					selectors: []*v1.NodeSelector{nil},
+				},
+				{
+					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
+						if len(parentPlacements) != 1 {
+							t.Fatalf("Expected 1 parent placements from the previous plugin, got %d", len(parentPlacements))
+						}
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantStatusCode: fwk.Success,
+		},
+		{
+			name: "Uses last plugin result",
+			plugins: []simplifiedGeneratorPlugin{
+				{
+					selectors: []*v1.NodeSelector{
+						makeNodeSelector(map[string]string{"k1": "v1"}),
+						makeNodeSelector(map[string]string{"k1": "v2"}),
+					},
+				},
+				{
+					selectors: []*v1.NodeSelector{
+						makeNodeSelector(map[string]string{"k1": "v1", "k2": "v1"}),
+						makeNodeSelector(map[string]string{"k1": "v2", "k2": "v1"}),
+					},
+				},
+			},
+			nodes: []*v1.Node{
+				st.MakeNode().Name("node1").Label("k1", "v1").Label("k2", "v1").Obj(),
+				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
+				st.MakeNode().Name("node3").Label("k1", "v2").Label("k2", "v1").Obj(),
+			},
+			initialPlacements: [][]string{
+				{"node1", "node2", "node3"},
+			},
+			wantPlacements: [][]string{
+				{"node1"}, {"node3"},
+			},
+			wantStatusCode: fwk.Success,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -4297,13 +4353,11 @@ func makeNodeSelector(labelTerms ...map[string]string) *v1.NodeSelector {
 	for _, term := range labelTerms {
 		selectorTerm := v1.NodeSelectorTerm{}
 		for k, v := range term {
-			selectorTerm.MatchExpressions = []v1.NodeSelectorRequirement{
-				{
-					Key:      k,
-					Operator: v1.NodeSelectorOpIn,
-					Values:   []string{v},
-				},
-			}
+			selectorTerm.MatchExpressions = append(selectorTerm.MatchExpressions, v1.NodeSelectorRequirement{
+				Key:      k,
+				Operator: v1.NodeSelectorOpIn,
+				Values:   []string{v},
+			})
 		}
 		selector.NodeSelectorTerms = append(selector.NodeSelectorTerms, selectorTerm)
 	}
