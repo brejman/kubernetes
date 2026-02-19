@@ -731,7 +731,7 @@ type GeneratePlacementsResult struct {
 type PlacementGeneratorPlugin interface {
 	Plugin
 
-	// GeneratePlacements generates a list of potential Placements for the given PodGroup and the parent placement.
+	// GeneratePlacements generates a list of potential Placements for the given PodGroup within the parent placement.
 	// Each Placement represents a candidate set of resources (e.g., nodes matching a selector)
 	// and potential DRA allocations where the PodGroup might be scheduled.
 	// The resulting placement selectors are merged with the parent placement by the framework.
