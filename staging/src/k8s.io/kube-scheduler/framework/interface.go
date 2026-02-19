@@ -717,7 +717,13 @@ type SignPlugin interface {
 	SignPod(ctx context.Context, pod *v1.Pod) ([]SignFragment, *Status)
 }
 
+// GeneratePlacementsResult represents the result of the PlacementGeneratorPlugin.
 type GeneratePlacementsResult struct {
+	// Placements is the set of placements that the plugin wants to partition the resources into.
+	// The partitions can overlap, but should be unique.
+	//
+	// To represent no valid partitions, set the array to nil or empty.
+	// To represent a partition covering all nodes, add a placement with nil node selector.
 	Placements []*Placement
 }
 

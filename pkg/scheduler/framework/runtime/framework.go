@@ -1928,13 +1928,6 @@ func mergeSelectors(s1, s2 *v1.NodeSelector) *v1.NodeSelector {
 		return s1.DeepCopy()
 	}
 
-	if len(s1.NodeSelectorTerms) == 0 {
-		return s2.DeepCopy()
-	}
-	if len(s2.NodeSelectorTerms) == 0 {
-		return s1.DeepCopy()
-	}
-
 	newTerms := []v1.NodeSelectorTerm{}
 
 	for _, t1 := range s1.NodeSelectorTerms {
@@ -1959,14 +1952,12 @@ func mergeSelectors(s1, s2 *v1.NodeSelector) *v1.NodeSelector {
 }
 
 func filterNodesMatchingSelector(nodes []fwk.NodeInfo, selector *v1.NodeSelector) ([]fwk.NodeInfo, error) {
-	if selector == nil || len(selector.NodeSelectorTerms) == 0 {
-		return nodes, nil // Match all
+	if selector == nil {
+		return nodes, nil
 	}
 
-	// Parse the API NodeSelector into a helper object that supports matching
 	ns, err := nodeaffinity.NewNodeSelector(selector)
 	if err != nil {
-		// If the selector is invalid, it matches no nodes.
 		return nil, err
 	}
 

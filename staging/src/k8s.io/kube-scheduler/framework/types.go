@@ -659,6 +659,7 @@ type Placement struct {
 	// NodeSelector specifies the node constraints for this Placement.
 	// For Topology this is derived from topology labels (e.g. all nodes with label
 	// 'topology-rack: rack-1').
+	// Must be a valid node selector or nil if the placement matches all nodes.
 	NodeSelector *v1.NodeSelector
 }
 

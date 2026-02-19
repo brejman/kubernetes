@@ -4270,33 +4270,6 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 			wantStatusCode: fwk.Success,
 		},
 		{
-			name: "Matches all nodes with selector with 0 terms",
-			plugins: []simplifiedGeneratorPlugin{
-				{
-					selectors: []*v1.NodeSelector{{}},
-				},
-				{
-					assertState: func(t *testing.T, parentPlacements []*fwk.PlacementInfo) {
-						if len(parentPlacements) != 1 {
-							t.Fatalf("Expected 1 parent placements from the previous plugin, got %d", len(parentPlacements))
-						}
-					},
-				},
-			},
-			nodes: []*v1.Node{
-				st.MakeNode().Name("node1").Label("k1", "v1").Obj(),
-				st.MakeNode().Name("node2").Label("k1", "v1").Obj(),
-				st.MakeNode().Name("node3").Label("k1", "v2").Obj(),
-			},
-			initialPlacements: [][]string{
-				{"node1", "node2", "node3"},
-			},
-			wantPlacements: [][]string{
-				{"node1", "node2", "node3"},
-			},
-			wantStatusCode: fwk.Success,
-		},
-		{
 			name: "Merges multiple selector expressions",
 			plugins: []simplifiedGeneratorPlugin{
 				{
