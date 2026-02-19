@@ -1915,6 +1915,11 @@ func (f *frameworkImpl) runPlacementGeneratorPlugin(ctx context.Context, pl fwk.
 	return placements, status
 }
 
+// mergeSelectors merges the selectors s1 and s2 by combining every term of s1 with every term of s2.
+// For each combination of terms, the MatchExpressions and MatchFields are concatenated.
+//
+// In case both selectors have the same entries, the resulting selector will contain duplicate entries.
+// This should not affect its usability.
 func mergeSelectors(s1, s2 *v1.NodeSelector) *v1.NodeSelector {
 	if s1 == nil {
 		return s2.DeepCopy()
