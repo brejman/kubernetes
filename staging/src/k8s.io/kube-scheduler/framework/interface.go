@@ -717,6 +717,10 @@ type SignPlugin interface {
 	SignPod(ctx context.Context, pod *v1.Pod) ([]SignFragment, *Status)
 }
 
+type GeneratePlacementsResult struct {
+	Placements []*Placement
+}
+
 // PlacementGeneratorPlugin is an interface for plugins that generate candidate Placements.
 type PlacementGeneratorPlugin interface {
 	Plugin
@@ -726,7 +730,7 @@ type PlacementGeneratorPlugin interface {
 	// and potential DRA allocations where the PodGroup might be scheduled.
 	// The resulting placement selectors are merged with the parent placement by the framework.
 	// This plugin runs in Phase 1 of the pod group scheduling cycle.
-	GeneratePlacements(ctx context.Context, state PodGroupCycleState, podGroup PodGroupInfo, parentPlacement *PlacementInfo) ([]*Placement, *Status)
+	GeneratePlacements(ctx context.Context, state PodGroupCycleState, podGroup PodGroupInfo, parentPlacement *PlacementInfo) (*GeneratePlacementsResult, *Status)
 }
 
 // Handle provides data and some tools that plugins can use. It is

@@ -1867,7 +1867,7 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 	for _, pl := range f.placementGeneratePlugins {
 		var nextParents []*fwk.PlacementInfo
 		for _, parent := range currentParents {
-			proposedPlacements, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, parent)
+			generatePlacementsResult, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, parent)
 
 			if !status.IsSuccess() {
 				if status.IsRejected() {
@@ -1876,7 +1876,7 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 				return nil, fwk.AsStatus(fmt.Errorf("running PlacementGenerate plugin %q: %w", pl.Name(), status.AsError())).WithPlugin(pl.Name())
 			}
 
-			for _, p := range proposedPlacements {
+			for _, p := range generatePlacementsResult.Placements {
 				matchingNodes, err := filterNodesMatchingSelector(parent.PlacementNodes, p.NodeSelector)
 				if err != nil {
 					return nil, fwk.AsStatus(fmt.Errorf("invalid selector from plugin %q: %w", pl.Name(), err)).WithPlugin(pl.Name())
@@ -1905,7 +1905,7 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 	return currentParents, nil
 }
 
-func (f *frameworkImpl) runPlacementGeneratorPlugin(ctx context.Context, pl fwk.PlacementGeneratorPlugin, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
+func (f *frameworkImpl) runPlacementGeneratorPlugin(ctx context.Context, pl fwk.PlacementGeneratorPlugin, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) (*fwk.GeneratePlacementsResult, *fwk.Status) {
 	if !state.ShouldRecordPluginMetrics() {
 		return pl.GeneratePlacements(ctx, state, podGroup, parentPlacement)
 	}

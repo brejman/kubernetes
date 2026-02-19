@@ -256,8 +256,8 @@ func (pl *TestPlugin) Bind(ctx context.Context, state fwk.CycleState, p *v1.Pod,
 	return fwk.NewStatus(fwk.Code(pl.inj.BindStatus), injectReason)
 }
 
-func (pl *TestPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
-	return pl.inj.GeneratePlacementsResult, fwk.NewStatus(fwk.Code(pl.inj.GeneratePlacementsStatus), injectReason)
+func (pl *TestPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) (*fwk.GeneratePlacementsResult, *fwk.Status) {
+	return &fwk.GeneratePlacementsResult{Placements: pl.inj.GeneratePlacementsResult}, fwk.NewStatus(fwk.Code(pl.inj.GeneratePlacementsStatus), injectReason)
 }
 
 func newTestCloseErrorPlugin(_ context.Context, injArgs runtime.Object, f fwk.Handle) (fwk.Plugin, error) {
@@ -4028,7 +4028,7 @@ func (p *testPlacementGeneratorPlugin) Name() string {
 	return p.name
 }
 
-func (p *testPlacementGeneratorPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) ([]*fwk.Placement, *fwk.Status) {
+func (p *testPlacementGeneratorPlugin) GeneratePlacements(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) (*fwk.GeneratePlacementsResult, *fwk.Status) {
 	p.parents = append(p.parents, parentPlacement)
 
 	if p.selectors != nil {
@@ -4038,9 +4038,9 @@ func (p *testPlacementGeneratorPlugin) GeneratePlacements(ctx context.Context, s
 				NodeSelector: p.selectors[i],
 			}
 		}
-		return placements, p.status
+		return &fwk.GeneratePlacementsResult{Placements: placements}, p.status
 	}
-	return []*fwk.Placement{&parentPlacement.Placement}, p.status
+	return &fwk.GeneratePlacementsResult{Placements: []*fwk.Placement{&parentPlacement.Placement}}, p.status
 }
 
 func (p *testPlacementGeneratorPlugin) assertState(t *testing.T) {
