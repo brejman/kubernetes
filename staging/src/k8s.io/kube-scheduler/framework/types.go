@@ -637,8 +637,8 @@ func (h HostPortInfo) sanitize(ip, protocol *string) {
 	}
 }
 
-// PodGroupInfo is a wrapper around the PodGroup API object together with a list of pods that belong to the pod group.
-// Typically used as an input to workload scheduling cycle plugins.
+// PodGroupInfo is a wrapper around the PodGroup API object together with a list of unscheduled pods that belong to the pod group.
+// Typically used as an input to pod group scheduling cycle plugins.
 type PodGroupInfo interface {
 	// GetUnscheduledPods returns pods that are currently being considered for scheduling.
 	// It can be useful to also retrieve the scheduled (assumed or assigned) pods.
@@ -652,8 +652,8 @@ type PodGroupInfo interface {
 	GetNamespace() string
 }
 
-// Placement determines the nodes to be considered when scheduling a pod group.
-// Workload scheduling cycle can check multiple placements and select the one that results
+// Placement determines the resources to be considered when scheduling a pod group.
+// Pod group scheduling cycle can check multiple placements and select the one that results
 // in the best pod assignments.
 type Placement struct {
 	// NodeSelector specifies the node constraints for this Placement.
