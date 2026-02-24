@@ -4013,7 +4013,6 @@ func BuildNodeInfos(nodes []*v1.Node) []fwk.NodeInfo {
 }
 
 type simplifiedGeneratorPlugin struct {
-	parents     []*fwk.PlacementInfo
 	assertState func(t *testing.T, parentPlacement []*fwk.PlacementInfo)
 	selectors   []*v1.NodeSelector
 	status      *fwk.Status
@@ -4021,7 +4020,8 @@ type simplifiedGeneratorPlugin struct {
 
 type testPlacementGeneratorPlugin struct {
 	simplifiedGeneratorPlugin
-	name string
+	parents []*fwk.PlacementInfo
+	name    string
 }
 
 func (p *testPlacementGeneratorPlugin) Name() string {
@@ -4040,7 +4040,7 @@ func (p *testPlacementGeneratorPlugin) GeneratePlacements(ctx context.Context, s
 		}
 		return &fwk.GeneratePlacementsResult{Placements: placements}, p.status
 	}
-	return &fwk.GeneratePlacementsResult{Placements: []*fwk.Placement{&parentPlacement.Placement}}, p.status
+	return &fwk.GeneratePlacementsResult{Placements: []*fwk.Placement{{NodeSelector: nil}}}, p.status
 }
 
 func (p *testPlacementGeneratorPlugin) assertState(t *testing.T) {

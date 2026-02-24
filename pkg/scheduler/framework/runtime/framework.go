@@ -1865,33 +1865,9 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 	currentParents := initialParents
 
 	for _, pl := range f.placementGeneratePlugins {
-		var nextParents []*fwk.PlacementInfo
-		for _, parent := range currentParents {
-			generatePlacementsResult, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, parent)
-
-			if !status.IsSuccess() {
-				if status.IsRejected() {
-					return nil, status.WithPlugin(pl.Name())
-				}
-				return nil, fwk.AsStatus(fmt.Errorf("running PlacementGenerate plugin %q: %w", pl.Name(), status.AsError())).WithPlugin(pl.Name())
-			}
-
-			for _, p := range generatePlacementsResult.Placements {
-				matchingNodes, err := filterNodesMatchingSelector(parent.PlacementNodes, p.NodeSelector)
-				if err != nil {
-					return nil, fwk.AsStatus(fmt.Errorf("invalid selector from plugin %q: %w", pl.Name(), err)).WithPlugin(pl.Name())
-				}
-
-				// Only propagate placements that actually have feasible nodes
-				if len(matchingNodes) > 0 {
-					nextParents = append(nextParents, &fwk.PlacementInfo{
-						Placement: fwk.Placement{
-							NodeSelector: mergeSelectors(parent.NodeSelector, p.NodeSelector),
-						},
-						PlacementNodes: matchingNodes,
-					})
-				}
-			}
+		nextParents, status := f.runPlacementGeneratorPluginForAllParents(ctx, pl, state, podGroup, currentParents)
+		if !status.IsSuccess() {
+			return nil, status.WithPlugin(pl.Name())
 		}
 
 		// If the chain produced no feasible domains, we can stop early.
@@ -1905,6 +1881,39 @@ func (f *frameworkImpl) RunPlacementGeneratorPlugins(ctx context.Context, state 
 	return currentParents, nil
 }
 
+func (f *frameworkImpl) runPlacementGeneratorPluginForAllParents(ctx context.Context, pl fwk.PlacementGeneratorPlugin, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacements []*fwk.PlacementInfo) ([]*fwk.PlacementInfo, *fwk.Status) {
+	var nextParents []*fwk.PlacementInfo
+	for _, parent := range parentPlacements {
+		generatePlacementsResult, status := f.runPlacementGeneratorPlugin(ctx, pl, state, podGroup, parent)
+
+		if !status.IsSuccess() {
+			if status.IsRejected() {
+				return nil, status.WithPlugin(pl.Name())
+			}
+			return nil, fwk.AsStatus(fmt.Errorf("running PlacementGenerate plugin %q: %w", pl.Name(), status.AsError())).WithPlugin(pl.Name())
+		}
+
+		for _, p := range generatePlacementsResult.Placements {
+			matchingNodes, err := filterNodesMatchingSelector(parent.PlacementNodes, p.NodeSelector)
+			if err != nil {
+				return nil, fwk.AsStatus(fmt.Errorf("invalid selector from plugin %q: %w", pl.Name(), err)).WithPlugin(pl.Name())
+			}
+
+			// Only propagate placements that actually have feasible nodes
+			if len(matchingNodes) > 0 {
+				nextParents = append(nextParents, &fwk.PlacementInfo{
+					AncestorPlacements: append(parent.AncestorPlacements, p),
+					Placement: fwk.Placement{
+						NodeSelector: p.NodeSelector,
+					},
+					PlacementNodes: matchingNodes,
+				})
+			}
+		}
+	}
+	return nextParents, nil
+}
+
 func (f *frameworkImpl) runPlacementGeneratorPlugin(ctx context.Context, pl fwk.PlacementGeneratorPlugin, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, parentPlacement *fwk.PlacementInfo) (*fwk.GeneratePlacementsResult, *fwk.Status) {
 	if !state.ShouldRecordPluginMetrics() {
 		return pl.GeneratePlacements(ctx, state, podGroup, parentPlacement)
@@ -1913,42 +1922,6 @@ func (f *frameworkImpl) runPlacementGeneratorPlugin(ctx context.Context, pl fwk.
 	placements, status := pl.GeneratePlacements(ctx, state, podGroup, parentPlacement)
 	f.metricsRecorder.ObservePluginDurationAsync(metrics.PlacementGenerate, pl.Name(), status.Code().String(), metrics.SinceInSeconds(startTime))
 	return placements, status
-}
-
-// mergeSelectors merges the selectors s1 and s2 by combining every term of s1 with every term of s2.
-// For each combination of terms, the MatchExpressions and MatchFields are concatenated.
-//
-// In case both selectors have the same entries, the resulting selector will contain duplicate entries.
-// This should not affect its usability.
-func mergeSelectors(s1, s2 *v1.NodeSelector) *v1.NodeSelector {
-	if s1 == nil {
-		return s2.DeepCopy()
-	}
-	if s2 == nil {
-		return s1.DeepCopy()
-	}
-
-	newTerms := []v1.NodeSelectorTerm{}
-
-	for _, t1 := range s1.NodeSelectorTerms {
-		for _, t2 := range s2.NodeSelectorTerms {
-			newTerm := v1.NodeSelectorTerm{
-				MatchExpressions: append(
-					append([]v1.NodeSelectorRequirement{}, t1.MatchExpressions...),
-					t2.MatchExpressions...,
-				),
-				MatchFields: append(
-					append([]v1.NodeSelectorRequirement{}, t1.MatchFields...),
-					t2.MatchFields...,
-				),
-			}
-			newTerms = append(newTerms, newTerm)
-		}
-	}
-
-	return &v1.NodeSelector{
-		NodeSelectorTerms: newTerms,
-	}
 }
 
 func filterNodesMatchingSelector(nodes []fwk.NodeInfo, selector *v1.NodeSelector) ([]fwk.NodeInfo, error) {
