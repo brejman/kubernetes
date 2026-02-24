@@ -4375,9 +4375,12 @@ func TestRunPlacementGeneratorPlugins(t *testing.T) {
 					simplifiedGeneratorPlugin: p,
 					name:                      pluginName,
 				}
-				r.Register(fmt.Sprintf("plugin-%d", i), func(ctx context.Context, _ runtime.Object, fh fwk.Handle) (fwk.Plugin, error) {
+				err := r.Register(fmt.Sprintf("plugin-%d", i), func(ctx context.Context, _ runtime.Object, fh fwk.Handle) (fwk.Plugin, error) {
 					return plugins[i], nil
 				})
+				if err != nil {
+					t.Fatalf("failed to register PlacementGeneratorPlugin")
+				}
 			}
 			profile := config.KubeSchedulerProfile{Plugins: &config.Plugins{PlacementGenerate: pluginSet}}
 			fw, err := newFrameworkWithQueueSortAndBind(ctx, r, profile, WithSnapshotSharedLister(cache.NewEmptySnapshot()))
