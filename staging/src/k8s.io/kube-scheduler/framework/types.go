@@ -646,8 +646,8 @@ type PodGroupInfo interface {
 	// The order of the pods is deterministic and based on signature, priority and timestamp.
 	GetUnscheduledPods() []*v1.Pod
 
-	// GetWorkloadReference returns the workload reference that is used to identify the workload.
-	GetWorkloadReference() *v1.WorkloadReference
+	// GetName returns the PodGroup name.
+	GetName() string
 	// GetNamespace returns the namespace the pod group belongs to.
 	GetNamespace() string
 }

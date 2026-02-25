@@ -146,6 +146,19 @@ func (pgs *podGroupState) AllPods() sets.Set[types.UID] {
 	return sets.KeySet(pgs.allPods)
 }
 
+func (pgs *podGroupState) ScheduledPods() []*v1.Pod {
+	pgs.lock.RLock()
+	defer pgs.lock.RUnlock()
+
+	scheduledPods := make([]*v1.Pod, 0, len(pgs.allPods))
+	for _, pod := range pgs.allPods {
+		if pod.Spec.NodeName != "" {
+			scheduledPods = append(scheduledPods, pod)
+		}
+	}
+	return scheduledPods
+}
+
 // UnscheduledPods returns all pods that are unscheduled for this group,
 // i.e., are neither assumed nor assigned.
 // The returned map type corresponds to the argument of the PodActivator.Activate method.
