@@ -76,6 +76,7 @@ type frameworkImpl struct {
 	permitPlugins             []fwk.PermitPlugin
 	batchablePlugins          []fwk.SignPlugin
 	podGroupPostFilterPlugins []framework.PodGroupPostFilterPlugin
+	podGroupPermitPlugins     []framework.PodGroupPermitPlugin
 
 	placementGeneratePlugins   []fwk.PlacementGeneratePlugin
 	placementScorePlugins      []fwk.PlacementScorePlugin
@@ -484,6 +485,13 @@ func NewFramework(ctx context.Context, r Registry, profile *config.KubeScheduler
 			}
 		} else {
 			logger.V(2).Info("Workload Aware Preemption is enabled, but default preemption plugin is not set. Workload Aware Preemption will not be used.")
+		}
+	}
+
+	// Only add PodGroupPermitPlugins if they're enabled for the Permit extension point.
+	for _, pl := range f.permitPlugins {
+		if p, ok := pl.(framework.PodGroupPermitPlugin); ok {
+			f.podGroupPermitPlugins = append(f.podGroupPermitPlugins, p)
 		}
 	}
 
@@ -1994,6 +2002,27 @@ func (f *frameworkImpl) runPermitPlugin(ctx context.Context, pl fwk.PermitPlugin
 	status, timeout := pl.Permit(ctx, state, pod, nodeName)
 	f.metricsRecorder.ObservePluginDurationAsync(metrics.Permit, pl.Name(), status.Code().String(), metrics.SinceInSeconds(startTime))
 	return status, timeout
+}
+
+func (f *frameworkImpl) RunPodGroupPermitPlugins(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
+	var result *fwk.Status
+
+	for _, pl := range f.podGroupPermitPlugins {
+		status := pl.PodGroupPermit(ctx, podGroupPermitCycleState, podGroupInfo, podStatus)
+		if status.IsSuccess() {
+			continue
+		}
+		if status.Code() == fwk.Unschedulable {
+			result = status.WithPlugin(pl.Name())
+			continue
+		}
+		if status.Code() == fwk.UnschedulableAndUnresolvable {
+			return status.WithPlugin(pl.Name())
+		}
+		return fwk.AsStatus(fmt.Errorf("running PodGroupPermit plugin: %w", status.AsError())).WithPlugin(pl.Name())
+	}
+
+	return result
 }
 
 // AddWaitingPod creates a waiting pod instance and adds it to the framework.

@@ -171,6 +171,17 @@ type PodGroupPostFilterPlugin interface {
 	PodGroupPostFilter(ctx context.Context, pg *v1alpha2.PodGroup, pods []*v1.Pod, pgSchedulingFunc func(ctx context.Context) *fwk.Status) *fwk.Status
 }
 
+type PodGroupPermitPlugin interface {
+	fwk.Plugin
+
+	// PodGroupPermit is called after each pod in a pod group is evaluated.
+	// Use permitCycleState to accumulate the results from the evaluated pods in current cycle.
+	// Return Unschedulable status if the pod group cannot be scheduled in the current state, but may become schedulable once more pods are evaluated.
+	// Return UnschedulableAndUnresolvable status if the pod group cannot be scheduled in the current state and will never become schedulable.
+	// Return Success status if the pod group can be scheduled in the current state.
+	PodGroupPermit(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status
+}
+
 // Framework manages the set of plugins in use by the scheduling framework.
 // Configured plugins are called at specified points in a scheduling context.
 type Framework interface {
@@ -252,6 +263,14 @@ type Framework interface {
 	// plugins returns "Wait", then this function will construct the pluginsWaitTime and return status with "Wait" code.
 	// This function itself will NOT create a waiting pod object and the caller should call AddWaitingPod method to do this.
 	RunPermitPlugins(ctx context.Context, state fwk.CycleState, pod *v1.Pod, nodeName string) (pluginsWaitTime map[string]time.Duration, status *fwk.Status)
+
+	// RunPodGroupPermitPlugins runs the set of configured Permit plugins that implement PodGroupPermit interface.
+	// The result will be Success if all plugins return Success.
+	// The only other valid statuses are UnschedulableAndUnresolvable and Unschedulable.
+	// If any plugin returns invalid status, the result will be Error and the remaining plugins won't be invoked.
+	// Otherwise, if at least 1 plugin returns UnschedulableAndUnresolvable, the result will be that.
+	// Otherwise, if at least 1 plugin returns Unschedulable, the result will be that.
+	RunPodGroupPermitPlugins(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status
 
 	// AddWaitingPod creates a waiting pod instance and adds it to the framework.
 	// It takes the pluginsWaitTime map returned by the RunPermitPlugins.

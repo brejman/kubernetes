@@ -28,6 +28,7 @@ import (
 	schedulinglisters "k8s.io/client-go/listers/scheduling/v1alpha2"
 	"k8s.io/klog/v2"
 	fwk "k8s.io/kube-scheduler/framework"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/feature"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/helper"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
@@ -54,6 +55,7 @@ type GangScheduling struct {
 var _ fwk.EnqueueExtensions = &GangScheduling{}
 var _ fwk.PreEnqueuePlugin = &GangScheduling{}
 var _ fwk.PermitPlugin = &GangScheduling{}
+var _ framework.PodGroupPermitPlugin = &GangScheduling{}
 
 // New initializes a new plugin and returns it.
 func New(_ context.Context, _ runtime.Object, fh fwk.Handle, fts feature.Features) (fwk.Plugin, error) {
@@ -216,4 +218,61 @@ func (pl *GangScheduling) Permit(ctx context.Context, state fwk.CycleState, pod 
 	}
 
 	return nil, 0
+}
+
+const gangSchedulingPodGroupPermitStateKey = "GangSchedulingPodGroupPermit"
+
+type gangSchedulingPodGroupPermitState struct {
+	evaluated, succeeded int
+}
+
+func (s *gangSchedulingPodGroupPermitState) Clone() fwk.StateData {
+	return &gangSchedulingPodGroupPermitState{
+		evaluated: s.evaluated,
+		succeeded: s.succeeded,
+	}
+}
+
+func getGangSchedulingPodGroupPermitState(state fwk.PodGroupCycleState) *gangSchedulingPodGroupPermitState {
+	permitState, err := state.Read(gangSchedulingPodGroupPermitStateKey)
+	if err != nil {
+		permitState = &gangSchedulingPodGroupPermitState{}
+		state.Write(gangSchedulingPodGroupPermitStateKey, permitState)
+	}
+	return permitState.(*gangSchedulingPodGroupPermitState)
+}
+
+func (pl *GangScheduling) PodGroupPermit(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
+	pg, err := pl.podGroupLister.PodGroups(podGroupInfo.GetNamespace()).Get(podGroupInfo.GetName())
+	if err != nil {
+		return fwk.AsStatus(err)
+	}
+
+	gangPolicy := pg.Spec.SchedulingPolicy.Gang
+	if gangPolicy == nil {
+		return nil
+	}
+
+	podGroupState, err := pl.snapshotLister.PodGroupStates().Get(podGroupInfo.GetNamespace(), podGroupInfo.GetName())
+	if err != nil {
+		return fwk.AsStatus(err)
+	}
+
+	minCount := int(gangPolicy.MinCount)
+
+	pgState := getGangSchedulingPodGroupPermitState(podGroupPermitCycleState)
+
+	pgState.evaluated++
+
+	remaining := len(podGroupInfo.GetUnscheduledPods()) - pgState.evaluated
+
+	if remaining+podGroupState.ScheduledPodsCount() < minCount {
+		return fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "minCount is not satisfiable")
+	}
+
+	if podGroupState.ScheduledPodsCount() < minCount {
+		return fwk.NewStatus(fwk.Unschedulable, "minCount is not yet satisfied")
+	}
+
+	return nil
 }

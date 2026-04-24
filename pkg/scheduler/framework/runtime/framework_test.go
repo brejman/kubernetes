@@ -783,6 +783,107 @@ func TestPodGroupPostFilterPlugins(t *testing.T) {
 
 }
 
+type mockPodGroupPermitPlugin struct {
+	name   string
+	status *fwk.Status
+	called bool
+}
+
+func (p *mockPodGroupPermitPlugin) Name() string { return p.name }
+
+func (p *mockPodGroupPermitPlugin) PodGroupPermit(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
+	p.called = true
+	return p.status
+}
+
+func TestRunPodGroupPermitPlugins(t *testing.T) {
+	tests := []struct {
+		name           string
+		plugins        []*mockPodGroupPermitPlugin
+		expectedStatus *fwk.Status
+		expectedCalled []bool
+	}{
+		{
+			name: "All plugins succeed",
+			plugins: []*mockPodGroupPermitPlugin{
+				{name: "p1", status: nil},
+				{name: "p2", status: nil},
+			},
+			expectedStatus: nil,
+			expectedCalled: []bool{true, true},
+		},
+		{
+			name: "First plugin returns Unschedulable, continues",
+			plugins: []*mockPodGroupPermitPlugin{
+				{name: "p1", status: fwk.NewStatus(fwk.Unschedulable, "unschedulable")},
+				{name: "p2", status: nil},
+			},
+			expectedStatus: fwk.NewStatus(fwk.Unschedulable, "unschedulable").WithPlugin("p1"),
+			expectedCalled: []bool{true, true},
+		},
+		{
+			name: "First plugin returns UnschedulableAndUnresolvable, breaks",
+			plugins: []*mockPodGroupPermitPlugin{
+				{name: "p1", status: fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "unresolvable")},
+				{name: "p2", status: nil},
+			},
+			expectedStatus: fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "unresolvable").WithPlugin("p1"),
+			expectedCalled: []bool{true, false},
+		},
+		{
+			name: "First plugin returns Unschedulable, second returns UnschedulableAndUnresolvable, returns unresolvable",
+			plugins: []*mockPodGroupPermitPlugin{
+				{name: "p1", status: fwk.NewStatus(fwk.Unschedulable, "unschedulable")},
+				{name: "p2", status: fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "unresolvable")},
+			},
+			expectedStatus: fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "unresolvable").WithPlugin("p2"),
+			expectedCalled: []bool{true, true},
+		},
+		{
+			name: "First plugin returns Unschedulable, second returns Unschedulable, returns last unschedulable",
+			plugins: []*mockPodGroupPermitPlugin{
+				{name: "p1", status: fwk.NewStatus(fwk.Unschedulable, "unschedulable1")},
+				{name: "p2", status: fwk.NewStatus(fwk.Unschedulable, "unschedulable2")},
+			},
+			expectedStatus: fwk.NewStatus(fwk.Unschedulable, "unschedulable2").WithPlugin("p2"),
+			expectedCalled: []bool{true, true},
+		},
+		{
+			name: "Plugin returns Error, breaks",
+			plugins: []*mockPodGroupPermitPlugin{
+				{name: "p1", status: fwk.NewStatus(fwk.Error, "error")},
+				{name: "p2", status: nil},
+			},
+			expectedStatus: fwk.AsStatus(fmt.Errorf("running PodGroupPermit plugin: %w", errors.New("error"))).WithPlugin("p1"),
+			expectedCalled: []bool{true, false},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, ctx := ktesting.NewTestContext(t)
+			f := &frameworkImpl{
+				podGroupPermitPlugins: make([]framework.PodGroupPermitPlugin, len(tc.plugins)),
+			}
+			for i, p := range tc.plugins {
+				f.podGroupPermitPlugins[i] = p
+			}
+
+			status := f.RunPodGroupPermitPlugins(ctx, framework.NewCycleState(), nil, nil)
+
+			if diff := cmp.Diff(tc.expectedStatus, status, statusCmpOpts...); diff != "" {
+				t.Errorf("Unexpected status (-want, +got):\n%s", diff)
+			}
+
+			for i, p := range tc.plugins {
+				if p.called != tc.expectedCalled[i] {
+					t.Errorf("Expected plugin %s called=%v, got %v", p.name, tc.expectedCalled[i], p.called)
+				}
+			}
+		})
+	}
+}
+
 func TestNewFrameworkMultiPointExpansion(t *testing.T) {
 	tests := []struct {
 		name        string

@@ -360,6 +360,9 @@ func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, 
 		waitingOnPreemption: false,
 	}
 
+	var podGroupPermitCycleState fwk.PodGroupCycleState = podGroupCycleState.Clone()
+	var podGroupPermitStatus *fwk.Status
+
 	logger := klog.FromContext(ctx)
 	logger.V(5).Info("Running a pod group scheduling algorithm", "podGroup", klog.KObj(podGroupInfo), "unscheduledPodsCount", len(podGroupInfo.QueuedPodInfos))
 
@@ -367,22 +370,37 @@ func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, 
 	for _, podInfo := range podGroupInfo.QueuedPodInfos {
 		podResult, revertFn := sched.podGroupPodSchedulingAlgorithm(ctx, schedFwk, podGroupCycleState, podGroupInfo, podInfo, postFilterMode)
 		result.podResults = append(result.podResults, podResult)
-		if !podResult.status.IsSuccess() && !podResult.requiresPreemption {
-			// When a pod is not feasible and doesn't require preemption, it means that it failed scheduling.
-			if podResult.status.IsRejected() {
-				// If the pod is rejected, the pod group can still be schedulable as long as the permit check can succeed.
-				continue
-			}
+		if revertFn != nil {
+			defer revertFn()
+		}
+
+		if !podResult.status.IsSuccess() && !podResult.status.IsRejected() {
 			// When the algorithm returns error or unexpected status, stop evaluating the rest of the pods.
 			result.status = fwk.AsStatus(fmt.Errorf("failed to schedule other pod from a pod group: %w", podResult.status.AsError()))
 			// Clear the waiting on preemption flag that could have been set by previous pods.
 			result.waitingOnPreemption = false
 			break
 		}
-		// At this point, the pod has passed the scheduling algorithm with the Permit status being either Success or Wait.
-		// We unreserve the pod at the end of the whole algorithm (via defer) because it should be ultimately returned to the queue,
-		// without binding it yet. We only assumed the pod to check feasibility of subsequent pods in the group.
-		defer revertFn()
+		podGroupPermitStatus = schedFwk.RunPodGroupPermitPlugins(ctx, podGroupPermitCycleState, podGroupInfo, podResult.status)
+
+		if podGroupPermitStatus.Code() == fwk.UnschedulableAndUnresolvable ||
+			podGroupPermitStatus.Code() == fwk.Error {
+			result.status = fwk.NewStatus(fwk.Unschedulable).WithError(podGroupPermitStatus.AsError())
+			// result.status = podGroupPermitStatus
+			// Clear the waiting on preemption flag that could have been set by previous pods.
+			result.waitingOnPreemption = false
+			break
+		}
+
+		if !podGroupPermitStatus.IsSuccess() {
+			result.status = podGroupPermitStatus
+		}
+
+		// When a pod is not feasible and doesn't require preemption, it means that it failed scheduling.
+		// If the pod is rejected, the pod group can still be schedulable as long as the permit check can succeed.
+		if podResult.status.IsRejected() && !podResult.requiresPreemption {
+			continue
+		}
 
 		requiresPreemption = requiresPreemption || podResult.requiresPreemption
 		if podResult.permitStatus.IsSuccess() {

@@ -1068,6 +1068,141 @@ func TestPodGroupSchedulingAlgorithm(t *testing.T) {
 	}
 }
 
+
+type fakePodGroupPermitPlugin struct {
+	*fakePodGroupPlugin
+	podGroupPermitStatus *fwk.Status
+}
+
+var _ framework.PodGroupPermitPlugin = &fakePodGroupPermitPlugin{}
+
+func (p *fakePodGroupPermitPlugin) PodGroupPermit(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
+	if p.podGroupPermitStatus != nil {
+		return p.podGroupPermitStatus
+	}
+	return nil
+}
+
+func TestPodGroupSchedulingDefaultAlgorithm_EarlyReturn(t *testing.T) {
+	logger, ctx := ktesting.NewTestContext(t)
+
+	pgName := "test-pg"
+	namespace := "default"
+	pg := st.MakePodGroup().Name(pgName).Namespace(namespace).MinCount(3).Obj()
+
+	client := clientsetfake.NewSimpleClientset(pg)
+	informerFactory := informers.NewSharedInformerFactory(client, 0)
+	podGroupLister := informerFactory.Scheduling().V1alpha2().PodGroups().Lister()
+
+	informerFactory.Start(ctx.Done())
+	informerFactory.WaitForCacheSync(ctx.Done())
+
+	cache := internalcache.New(ctx, nil, true)
+
+	p1 := st.MakePod().Name("p1").Namespace(namespace).UID("p1").PodGroupName(pgName).Obj()
+	p2 := st.MakePod().Name("p2").Namespace(namespace).UID("p2").PodGroupName(pgName).Obj()
+	p3 := st.MakePod().Name("p3").Namespace(namespace).UID("p3").PodGroupName(pgName).Obj()
+
+	cache.AddPodGroupMember(p1)
+	err := cache.AssumePod(logger, p1)
+	if err != nil {
+		t.Fatalf("Failed to assume pod: %v", err)
+	}
+
+	profileCfg := config.KubeSchedulerProfile{
+		SchedulerName: "default-scheduler",
+		Plugins: &config.Plugins{
+			QueueSort: config.PluginSet{
+				Enabled: []config.Plugin{{Name: queuesort.Name}},
+			},
+			Bind: config.PluginSet{
+				Enabled: []config.Plugin{{Name: defaultbinder.Name}},
+			},
+			Permit: config.PluginSet{
+				Enabled: []config.Plugin{{Name: "FakePodGroupPlugin"}},
+			},
+			Filter: config.PluginSet{
+				Enabled: []config.Plugin{{Name: "FakePodGroupPlugin"}},
+			},
+		},
+	}
+
+	dummyPlugin := &fakePodGroupPermitPlugin{fakePodGroupPlugin: &fakePodGroupPlugin{}}
+	registry := frameworkruntime.Registry{
+		queuesort.Name:     queuesort.New,
+		defaultbinder.Name: defaultbinder.New,
+		"FakePodGroupPlugin": func(ctx context.Context, obj runtime.Object, handle fwk.Handle) (fwk.Plugin, error) {
+			return dummyPlugin, nil
+		},
+	}
+
+	snapshot := internalcache.NewEmptySnapshot()
+	queue := internalqueue.NewSchedulingQueue(nil, informerFactory)
+	schedFwk, err := frameworkruntime.NewFramework(ctx, registry, &profileCfg,
+		frameworkruntime.WithInformerFactory(informerFactory),
+		frameworkruntime.WithSnapshotSharedLister(snapshot),
+		frameworkruntime.WithClientSet(client),
+		frameworkruntime.WithEventRecorder(events.NewFakeRecorder(100)),
+		frameworkruntime.WithPodNominator(queue),
+	)
+	if err != nil {
+		t.Fatalf("Failed to create framework: %v", err)
+	}
+
+	sched := &Scheduler{
+		Cache:            cache,
+		podGroupLister:   podGroupLister,
+		Profiles:         profile.Map{"default-scheduler": schedFwk},
+		nodeInfoSnapshot: snapshot,
+	}
+	sched.applyDefaultHandlers()
+
+	qInfo1 := &framework.QueuedPodInfo{PodInfo: &framework.PodInfo{Pod: p1}}
+	qInfo2 := &framework.QueuedPodInfo{PodInfo: &framework.PodInfo{Pod: p2}}
+	qInfo3 := &framework.QueuedPodInfo{PodInfo: &framework.PodInfo{Pod: p3}}
+
+	podGroupInfo := &framework.QueuedPodGroupInfo{
+		PodGroupInfo: &framework.PodGroupInfo{
+			Namespace: namespace,
+			Name:      pgName,
+		},
+		QueuedPodInfos: []*framework.QueuedPodInfo{qInfo1, qInfo2, qInfo3},
+	}
+
+	dummyPlugin.filterStatus = map[string]*fwk.Status{
+		"p1": fwk.NewStatus(fwk.Unschedulable, "p1 failed"),
+		"p2": nil, // feasible
+		"p3": nil, // feasible
+	}
+	dummyPlugin.permitStatus = map[string]*fwk.Status{
+		"p1": nil,
+		"p2": nil,
+		"p3": nil,
+	}
+	dummyPlugin.podGroupPermitStatus = fwk.NewStatus(fwk.UnschedulableAndUnresolvable, "pod group is not schedulable")
+
+	testNode := st.MakeNode().Name("node1").UID("node1").Obj()
+	cache.AddNode(logger, testNode)
+
+	err = cache.UpdateSnapshot(logger, sched.nodeInfoSnapshot)
+	if err != nil {
+		t.Fatalf("Failed to update snapshot: %v", err)
+	}
+
+	result := sched.podGroupSchedulingDefaultAlgorithm(ctx, schedFwk, framework.NewCycleState(), podGroupInfo, runAllPostFilters)
+
+	// We expect only p1 in the results because p3 should be skipped.
+	if len(result.podResults) != 1 {
+		t.Errorf("Expected 1 pod result, got %d", len(result.podResults))
+	}
+	if result.podResults[0].pod.Name != "p1" {
+		t.Errorf("Expected result for p1, got %s", result.podResults[0].pod.Name)
+	}
+	if result.status.Code() != fwk.Unschedulable {
+		t.Errorf("Expected status Unschedulable, got %s", result.status.Code())
+	}
+}
+
 func TestSubmitPodGroupAlgorithmResult(t *testing.T) {
 	testNode := st.MakeNode().Name("node1").UID("node1").Obj()
 
