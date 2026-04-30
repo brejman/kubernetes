@@ -101,7 +101,7 @@ func (c *CycleState) GetParallelPreBindPlugins() sets.Set[string] {
 }
 
 func (c *CycleState) IsPodGroupSchedulingCycle() bool {
-	return c.placementCycleState != nil
+	return c.placementCycleState != nil || c.podGroupCycleState != nil
 }
 
 func (c *CycleState) SetPlacementCycleState(placementCycleState fwk.PlacementCycleState) {
