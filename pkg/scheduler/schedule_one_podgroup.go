@@ -182,7 +182,7 @@ type podSchedulingContext struct {
 }
 
 // initPodSchedulingContext initializes the scheduling context of a single pod for pod group scheduling cycle.
-func initPodSchedulingContext(ctx context.Context, pod *v1.Pod, podGroupState *framework.CycleState, postFilterMode podGroupPostFilterMode) *podSchedulingContext {
+func initPodSchedulingContext(ctx context.Context, pod *v1.Pod, podGroupState fwk.PodGroupCycleState, postFilterMode podGroupPostFilterMode) *podSchedulingContext {
 	logger := klog.FromContext(ctx)
 	// TODO(knelasevero): Remove duplicated keys from log entry calls
 	// When contextualized logging hits GA
@@ -233,13 +233,13 @@ func (sched *Scheduler) podGroupCycle(ctx context.Context, schedFwk framework.Fr
 		return
 	}
 
-	result := sched.podGroupSchedulingAlgorithm(ctx, schedFwk, podGroupCycleState, podGroupInfo, runAllPostFilters)
+	result := sched.podGroupSchedulingAlgorithm(ctx, schedFwk, podGroupCycleState.CloneInternal(), podGroupInfo, runAllPostFilters)
 	metrics.PodGroupSchedulingAlgorithmLatency.Observe(metrics.SinceInSeconds(start))
 
 	// Run workload aware preemption if required. If the preemption is successful,
 	// we need to put the pods from pod group back into the scheduling queue.
 	if sched.workloadAwarePreemptionEnabled && result.status.Code() == fwk.Unschedulable {
-		status := sched.runWorkloadAwarePreemption(ctx, schedFwk, podGroupCycleState, podGroupInfo)
+		status := sched.runWorkloadAwarePreemption(ctx, schedFwk, podGroupCycleState.CloneInternal(), podGroupInfo)
 		if status.IsSuccess() {
 			result.waitingOnPreemption = true
 		} else if status.IsError() {
@@ -353,14 +353,13 @@ type podGroupAlgorithmResult struct {
 // It tries to schedule each pod using standard filtering and scoring logic in a fixed order.
 // If a pod requires preemption to be schedulable, subsequent pods in the algorithm
 // treat that pod as already scheduled on that node with victims being already removed in memory.
-func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupCycleState *framework.CycleState, podGroupInfo *framework.QueuedPodGroupInfo, postFilterMode podGroupPostFilterMode) podGroupAlgorithmResult {
+func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupCycleState fwk.PodGroupCycleState, podGroupInfo *framework.QueuedPodGroupInfo, postFilterMode podGroupPostFilterMode) podGroupAlgorithmResult {
 	result := podGroupAlgorithmResult{
 		podResults:          make([]algorithmResult, 0, len(podGroupInfo.QueuedPodInfos)),
 		status:              fwk.NewStatus(fwk.Unschedulable).WithError(errPodGroupUnschedulable),
 		waitingOnPreemption: false,
 	}
 
-	var podGroupPermitCycleState fwk.PodGroupCycleState = podGroupCycleState.Clone()
 	var podGroupPermitStatus *fwk.Status
 
 	logger := klog.FromContext(ctx)
@@ -381,7 +380,7 @@ func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, 
 			result.waitingOnPreemption = false
 			break
 		}
-		podGroupPermitStatus = schedFwk.RunPodGroupPermitPlugins(ctx, podGroupPermitCycleState, podGroupInfo, podResult.status)
+		podGroupPermitStatus = schedFwk.RunPodGroupPermitPlugins(ctx, podGroupCycleState, podGroupInfo, podResult.status)
 
 		if podGroupPermitStatus.Code() == fwk.UnschedulableAndUnresolvable ||
 			podGroupPermitStatus.Code() == fwk.Error {
@@ -421,7 +420,7 @@ func (sched *Scheduler) podGroupSchedulingDefaultAlgorithm(ctx context.Context, 
 
 // podGroupPodSchedulingAlgorithm runs a scheduling algorithm for individual pod from a pod group.
 // It returns the algorithm result and, if successful or the preemption is required, the permit status together with the revert function.
-func (sched *Scheduler) podGroupPodSchedulingAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupCycleState *framework.CycleState, podGroupInfo *framework.QueuedPodGroupInfo, podInfo *framework.QueuedPodInfo, postFilterMode podGroupPostFilterMode) (algorithmResult, func()) {
+func (sched *Scheduler) podGroupPodSchedulingAlgorithm(ctx context.Context, schedFwk framework.Framework, podGroupCycleState fwk.PodGroupCycleState, podGroupInfo *framework.QueuedPodGroupInfo, podInfo *framework.QueuedPodInfo, postFilterMode podGroupPostFilterMode) (algorithmResult, func()) {
 	pod := podInfo.Pod
 	podCtx := initPodSchedulingContext(ctx, pod, podGroupCycleState, postFilterMode)
 	logger := podCtx.logger
@@ -695,7 +694,7 @@ func (sched *Scheduler) podGroupSchedulingPlacementAlgorithm(ctx context.Context
 				status: fwk.AsStatus(fmt.Errorf("failed to assume pod group placement: %w", err)),
 			}
 		}
-		result := sched.podGroupSchedulingDefaultAlgorithm(ctx, schedFwk, podGroupCycleState, podGroupInfo, postFilterMode)
+		result := sched.podGroupSchedulingDefaultAlgorithm(ctx, schedFwk, podGroupCycleState.Clone(), podGroupInfo, postFilterMode)
 		sched.nodeInfoSnapshot.ForgetPlacement()
 		if result.status.IsError() {
 			return result

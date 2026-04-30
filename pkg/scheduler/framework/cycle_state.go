@@ -121,9 +121,9 @@ func (c *CycleState) ShouldSkipAllPostFilterPlugins() bool {
 	return c.skipAllPostFilterPlugins
 }
 
-// Clone creates a copy of CycleState and returns its pointer. Clone returns
+// CloneInternal creates a copy of CycleState and returns its pointer. Clone returns
 // nil if the context being cloned is nil.
-func (c *CycleState) Clone() fwk.CycleState {
+func (c *CycleState) CloneInternal() *CycleState {
 	if c == nil {
 		return nil
 	}
@@ -143,6 +143,10 @@ func (c *CycleState) Clone() fwk.CycleState {
 	copy.skipAllPostFilterPlugins = c.skipAllPostFilterPlugins
 
 	return copy
+}
+
+func (c *CycleState) Clone() fwk.CycleState {
+	return c.CloneInternal()
 }
 
 // Read retrieves data with the given "key" from CycleState. If the key is not
