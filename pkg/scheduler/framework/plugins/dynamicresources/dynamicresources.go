@@ -699,7 +699,7 @@ func getStateData(cs fwk.CycleState) (*stateData, error) {
 }
 
 func getPodGroupStateData(cs fwk.CycleState) (*podGroupStateData, error) {
-	podGroupCycleState := cs.GetPodGroupSchedulingCycle()
+	podGroupCycleState := cs.GetPodGroupCycleState()
 	if podGroupCycleState == nil {
 		return nil, nil
 	}

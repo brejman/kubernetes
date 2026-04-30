@@ -349,7 +349,7 @@ func TestGangSchedulingFlow(t *testing.T) {
 
 			cycleState := schedulerframework.NewCycleState()
 			if tt.isDuringPodGroupSchedulingCycle {
-				cycleState.SetPodGroupSchedulingCycle(cycleState)
+				cycleState.SetPlacementCycleState(schedulerframework.NewPlacementCycleState(cycleState))
 			}
 
 			pod := tt.pod.DeepCopy()
@@ -520,6 +520,7 @@ func TestPodGroupPermit(t *testing.T) {
 			}
 
 			cycleState := schedulerframework.NewCycleState()
+			placementCycleState := schedulerframework.NewPlacementCycleState(cycleState)
 
 			for i, code := range tc.podStatuses {
 				podStatus := fwk.NewStatus(code)
@@ -528,7 +529,7 @@ func TestPodGroupPermit(t *testing.T) {
 					mockState.scheduledPodsCount++
 				}
 
-				gotStatus := pl.PodGroupPermit(ctx, cycleState, pgInfo, podStatus)
+				gotStatus := pl.PodGroupPermit(ctx, placementCycleState, pgInfo, podStatus)
 
 				gotCode := fwk.Success
 				if gotStatus != nil {

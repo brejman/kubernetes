@@ -1075,7 +1075,7 @@ type fakePodGroupPermitPlugin struct {
 
 var _ framework.PodGroupPermitPlugin = &fakePodGroupPermitPlugin{}
 
-func (p *fakePodGroupPermitPlugin) PodGroupPermit(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
+func (p *fakePodGroupPermitPlugin) PodGroupPermit(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
 	if p.podGroupPermitStatus != nil {
 		return p.podGroupPermitStatus
 	}
@@ -1774,7 +1774,7 @@ func TestSubmitPodGroupAlgorithmResult(t *testing.T) {
 
 			for i := range tt.algorithmResult.podResults {
 				pod := podGroupInfo.QueuedPodInfos[i].Pod
-				podCtx := initPodSchedulingContext(ctx, pod, podGroupCycleState, runAllPostFilters)
+				podCtx := initPodSchedulingContext(ctx, pod, framework.NewPlacementCycleState(podGroupCycleState), runAllPostFilters)
 				tt.algorithmResult.podResults[i].podCtx = podCtx
 			}
 

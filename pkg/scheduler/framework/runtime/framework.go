@@ -2004,11 +2004,11 @@ func (f *frameworkImpl) runPermitPlugin(ctx context.Context, pl fwk.PermitPlugin
 	return status, timeout
 }
 
-func (f *frameworkImpl) RunPodGroupPermitPlugins(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
+func (f *frameworkImpl) RunPodGroupPermitPlugins(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
 	var result *fwk.Status
 
 	for _, pl := range f.podGroupPermitPlugins {
-		status := pl.PodGroupPermit(ctx, podGroupPermitCycleState, podGroupInfo, podStatus)
+		status := pl.PodGroupPermit(ctx, placementCycleState, podGroupInfo, podStatus)
 		if status.IsSuccess() {
 			continue
 		}

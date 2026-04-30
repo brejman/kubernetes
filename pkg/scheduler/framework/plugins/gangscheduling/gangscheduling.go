@@ -233,7 +233,7 @@ func (s *gangSchedulingPodGroupPermitState) Clone() fwk.StateData {
 	}
 }
 
-func getGangSchedulingPodGroupPermitState(state fwk.PodGroupCycleState) *gangSchedulingPodGroupPermitState {
+func getGangSchedulingPodGroupPermitState(state fwk.PlacementCycleState) *gangSchedulingPodGroupPermitState {
 	permitState, err := state.Read(gangSchedulingPodGroupPermitStateKey)
 	if err != nil {
 		permitState = &gangSchedulingPodGroupPermitState{}
@@ -242,7 +242,7 @@ func getGangSchedulingPodGroupPermitState(state fwk.PodGroupCycleState) *gangSch
 	return permitState.(*gangSchedulingPodGroupPermitState)
 }
 
-func (pl *GangScheduling) PodGroupPermit(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
+func (pl *GangScheduling) PodGroupPermit(ctx context.Context, podGroupPermitCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
 	pg, err := pl.podGroupLister.PodGroups(podGroupInfo.GetNamespace()).Get(podGroupInfo.GetName())
 	if err != nil {
 		return fwk.AsStatus(err)

@@ -791,7 +791,7 @@ type mockPodGroupPermitPlugin struct {
 
 func (p *mockPodGroupPermitPlugin) Name() string { return p.name }
 
-func (p *mockPodGroupPermitPlugin) PodGroupPermit(ctx context.Context, state fwk.PodGroupCycleState, podGroup fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
+func (p *mockPodGroupPermitPlugin) PodGroupPermit(ctx context.Context, state fwk.PlacementCycleState, podGroup fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status {
 	p.called = true
 	return p.status
 }
@@ -869,7 +869,7 @@ func TestRunPodGroupPermitPlugins(t *testing.T) {
 				f.podGroupPermitPlugins[i] = p
 			}
 
-			status := f.RunPodGroupPermitPlugins(ctx, framework.NewCycleState(), nil, nil)
+			status := f.RunPodGroupPermitPlugins(ctx, framework.NewPlacementCycleState(framework.NewCycleState()), nil, nil)
 
 			if diff := cmp.Diff(tc.expectedStatus, status, statusCmpOpts...); diff != "" {
 				t.Errorf("Unexpected status (-want, +got):\n%s", diff)

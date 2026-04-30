@@ -175,11 +175,11 @@ type PodGroupPermitPlugin interface {
 	fwk.Plugin
 
 	// PodGroupPermit is called after each pod in a pod group is evaluated.
-	// Use permitCycleState to accumulate the results from the evaluated pods in current cycle.
+	// Use placementCycleState to accumulate the results from the evaluated pods in current cycle.
 	// Return Unschedulable status if the pod group cannot be scheduled in the current state, but may become schedulable once more pods are evaluated.
 	// Return UnschedulableAndUnresolvable status if the pod group cannot be scheduled in the current state and will never become schedulable.
 	// Return Success status if the pod group can be scheduled in the current state.
-	PodGroupPermit(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status
+	PodGroupPermit(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status
 }
 
 // Framework manages the set of plugins in use by the scheduling framework.
@@ -270,7 +270,7 @@ type Framework interface {
 	// If any plugin returns invalid status, the result will be Error and the remaining plugins won't be invoked.
 	// Otherwise, if at least 1 plugin returns UnschedulableAndUnresolvable, the result will be that.
 	// Otherwise, if at least 1 plugin returns Unschedulable, the result will be that.
-	RunPodGroupPermitPlugins(ctx context.Context, podGroupPermitCycleState fwk.PodGroupCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status
+	RunPodGroupPermitPlugins(ctx context.Context, placementCycleState fwk.PlacementCycleState, podGroupInfo fwk.PodGroupInfo, podStatus *fwk.Status) *fwk.Status
 
 	// AddWaitingPod creates a waiting pod instance and adds it to the framework.
 	// It takes the pluginsWaitTime map returned by the RunPermitPlugins.
