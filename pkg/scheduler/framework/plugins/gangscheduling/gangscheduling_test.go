@@ -192,7 +192,6 @@ func (m *mockSharedLister) PodGroupStates() fwk.PodGroupStateLister {
 	return m.podGroupStateLister
 }
 
-
 func TestGangSchedulingFlow(t *testing.T) {
 	gangPodGroup1 := st.MakePodGroup().Namespace("ns1").Name("pg1").TemplateRef("t1", "gang-wl").MinCount(3).Obj()
 	gangPodGroup2 := st.MakePodGroup().Namespace("ns1").Name("pg2").TemplateRef("t2", "gang-wl").MinCount(4).Obj()
@@ -416,8 +415,8 @@ func TestPodGroupPermit(t *testing.T) {
 		expectedStatuses []fwk.Code
 	}{
 		{
-			name:            "All pods succeed, minCount met at end",
-			minCount:         2,
+			name:     "All pods succeed, minCount met at end",
+			minCount: 2,
 			unscheduledPods: []*v1.Pod{
 				st.MakePod().Name("p1").Obj(),
 				st.MakePod().Name("p2").Obj(),
@@ -432,8 +431,8 @@ func TestPodGroupPermit(t *testing.T) {
 			},
 		},
 		{
-			name:            "First pod fails, minCount not satisfiable",
-			minCount:         3,
+			name:     "First pod fails, minCount not satisfiable",
+			minCount: 3,
 			unscheduledPods: []*v1.Pod{
 				st.MakePod().Name("p1").Obj(),
 				st.MakePod().Name("p2").Obj(),
@@ -447,8 +446,8 @@ func TestPodGroupPermit(t *testing.T) {
 			},
 		},
 		{
-			name:            "Second pod fails, minCount not satisfiable",
-			minCount:         2,
+			name:     "Second pod fails, minCount not satisfiable",
+			minCount: 2,
 			unscheduledPods: []*v1.Pod{
 				st.MakePod().Name("p1").Obj(),
 				st.MakePod().Name("p2").Obj(),
@@ -458,13 +457,13 @@ func TestPodGroupPermit(t *testing.T) {
 				fwk.Unschedulable,
 			},
 			expectedStatuses: []fwk.Code{
-				fwk.Unschedulable, // 1 succeeded, need 2
+				fwk.Unschedulable,                // 1 succeeded, need 2
 				fwk.UnschedulableAndUnresolvable, // 1 succeeded, 0 remaining, cannot meet 2
 			},
 		},
 		{
 			name:            "Non-gang pod group ignored",
-			minCount:         0, // No gang policy
+			minCount:        0, // No gang policy
 			unscheduledPods: []*v1.Pod{st.MakePod().Name("p1").Obj()},
 			podStatuses: []fwk.Code{
 				fwk.Unschedulable,
@@ -478,7 +477,7 @@ func TestPodGroupPermit(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			_, ctx := ktesting.NewTestContext(t)
-			
+
 			pgName := "test-pg"
 			namespace := "default"
 			pg := st.MakePodGroup().Namespace(namespace).Name(pgName).Obj()
@@ -510,7 +509,7 @@ func TestPodGroupPermit(t *testing.T) {
 				t.Fatalf("Failed to create plugin: %v", err)
 			}
 			pl := p.(*GangScheduling)
-			
+
 			// Inject the mock lister
 			pl.snapshotLister = mockLister
 
@@ -524,18 +523,18 @@ func TestPodGroupPermit(t *testing.T) {
 
 			for i, code := range tc.podStatuses {
 				podStatus := fwk.NewStatus(code)
-				
+
 				if code == fwk.Success {
 					mockState.scheduledPodsCount++
 				}
 
 				gotStatus := pl.PodGroupPermit(ctx, cycleState, pgInfo, podStatus)
-				
-				var gotCode fwk.Code = fwk.Success
+
+				gotCode := fwk.Success
 				if gotStatus != nil {
 					gotCode = gotStatus.Code()
 				}
-				
+
 				if gotCode != tc.expectedStatuses[i] {
 					t.Errorf("Step %d: expected status %v, got %v", i, tc.expectedStatuses[i], gotCode)
 				}
@@ -550,7 +549,6 @@ type testPodGroupInfo struct {
 	unscheduledPods []*v1.Pod
 }
 
-func (t *testPodGroupInfo) GetNamespace() string { return t.namespace }
-func (t *testPodGroupInfo) GetName() string      { return t.name }
+func (t *testPodGroupInfo) GetNamespace() string          { return t.namespace }
+func (t *testPodGroupInfo) GetName() string               { return t.name }
 func (t *testPodGroupInfo) GetUnscheduledPods() []*v1.Pod { return t.unscheduledPods }
-

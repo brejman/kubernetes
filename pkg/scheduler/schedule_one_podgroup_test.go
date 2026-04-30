@@ -1068,7 +1068,6 @@ func TestPodGroupSchedulingAlgorithm(t *testing.T) {
 	}
 }
 
-
 type fakePodGroupPermitPlugin struct {
 	*fakePodGroupPlugin
 	podGroupPermitStatus *fwk.Status
