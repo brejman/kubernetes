@@ -53,7 +53,7 @@ import (
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/dynamicresources"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/noderesources"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/nodevolumelimits"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	frameworkruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
 	"k8s.io/kubernetes/pkg/scheduler/util/assumecache"

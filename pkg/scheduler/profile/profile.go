@@ -28,7 +28,7 @@ import (
 	"k8s.io/client-go/tools/events"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	frameworkruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 )
 
 // RecorderFactory builds an EventRecorder for a given scheduler name.

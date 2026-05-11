@@ -28,7 +28,7 @@ import (
 	extenderv1 "k8s.io/kube-scheduler/extender/v1"
 	fwk "k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	frameworkruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/util"
 )
 

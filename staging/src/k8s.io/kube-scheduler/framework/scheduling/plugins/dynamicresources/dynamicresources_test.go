@@ -67,7 +67,7 @@ import (
 	internalcache "k8s.io/kubernetes/pkg/scheduler/backend/cache"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/feature"
-	"k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	"k8s.io/kube-scheduler/framework/scheduling/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	"k8s.io/kubernetes/pkg/scheduler/util/assumecache"

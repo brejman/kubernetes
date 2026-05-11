@@ -45,7 +45,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/defaultbinder"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/names"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	frameworkruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	testfwk "k8s.io/kubernetes/test/integration/framework"
 	testutils "k8s.io/kubernetes/test/integration/util"

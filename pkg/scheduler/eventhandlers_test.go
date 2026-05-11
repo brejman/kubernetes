@@ -60,7 +60,7 @@ import (
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/nodeports"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/noderesources"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/queuesort"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	frameworkruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"

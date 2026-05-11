@@ -41,7 +41,7 @@ import (
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/volumebinding"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/volumerestrictions"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/volumezone"
-	"k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	"k8s.io/kube-scheduler/framework/scheduling/runtime"
 )
 
 // NewInTreeRegistry builds the registry with all the in-tree plugins.

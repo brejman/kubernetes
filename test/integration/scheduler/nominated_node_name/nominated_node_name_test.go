@@ -41,7 +41,7 @@ import (
 	plfeature "k8s.io/kube-scheduler/framework/scheduling/plugins/feature"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/names"
 	"k8s.io/kubernetes/pkg/scheduler/framework/preemption"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	frameworkruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	schedulerutils "k8s.io/kubernetes/test/integration/scheduler"
 	testutils "k8s.io/kubernetes/test/integration/util"

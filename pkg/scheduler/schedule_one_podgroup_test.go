@@ -53,7 +53,7 @@ import (
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/defaultbinder"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/names"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/queuesort"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	frameworkruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	tf "k8s.io/kubernetes/pkg/scheduler/testing/framework"

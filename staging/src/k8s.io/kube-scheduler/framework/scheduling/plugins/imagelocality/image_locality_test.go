@@ -30,7 +30,7 @@ import (
 	fwk "k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/backend/cache"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
-	"k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	"k8s.io/kube-scheduler/framework/scheduling/runtime"
 )
 
 func TestImageLocalityPriority(t *testing.T) {

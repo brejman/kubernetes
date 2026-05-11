@@ -26,7 +26,7 @@ import (
 	schedulerapi "k8s.io/kubernetes/pkg/scheduler/apis/config"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/scheme"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
-	"k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	"k8s.io/kube-scheduler/framework/scheduling/runtime"
 )
 
 var configDecoder = scheme.Codecs.UniversalDecoder()

@@ -50,7 +50,7 @@ import (
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/defaultbinder"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/noderesources"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/schedulinggates"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	frameworkruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	schedulerutils "k8s.io/kubernetes/test/integration/scheduler"
 	testutils "k8s.io/kubernetes/test/integration/util"

@@ -34,7 +34,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kube-scheduler/framework/scheduling/plugins/feature"
 	plugintesting "k8s.io/kube-scheduler/framework/scheduling/plugins/testing"
-	schedruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	schedruntime "k8s.io/kube-scheduler/framework/scheduling/runtime"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	tf "k8s.io/kubernetes/pkg/scheduler/testing/framework"
 )
