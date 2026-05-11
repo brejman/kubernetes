@@ -41,7 +41,7 @@ import (
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/latest"
 	configtesting "k8s.io/kubernetes/pkg/scheduler/apis/config/testing"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config/testing/defaults"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/names"
 	"k8s.io/utils/ptr"
 )
 

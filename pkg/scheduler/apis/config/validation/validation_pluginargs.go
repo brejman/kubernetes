@@ -30,7 +30,7 @@ import (
 	"k8s.io/component-helpers/scheduling/corev1/nodeaffinity"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/feature"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/feature"
 )
 
 // supportedScoringStrategyTypes has to be a set of strings for use with field.Unsupported

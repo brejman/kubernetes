@@ -24,7 +24,7 @@ import (
 	"k8s.io/component-base/metrics"
 	"k8s.io/component-base/metrics/legacyregistry"
 	"k8s.io/kubernetes/pkg/features"
-	volumebindingmetrics "k8s.io/kubernetes/pkg/scheduler/framework/plugins/volumebinding/metrics"
+	volumebindingmetrics "k8s.io/kube-scheduler/framework/scheduling/plugins/volumebinding/metrics"
 )
 
 const (

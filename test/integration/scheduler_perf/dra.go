@@ -43,7 +43,7 @@ import (
 	"k8s.io/dynamic-resource-allocation/structured"
 	"k8s.io/kube-scheduler/framework"
 	"k8s.io/kubernetes/pkg/features"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/dynamicresources"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/dynamicresources"
 	"k8s.io/kubernetes/pkg/scheduler/util/assumecache"
 	"k8s.io/kubernetes/test/utils/client-go/ktesting"
 	"k8s.io/utils/ptr"

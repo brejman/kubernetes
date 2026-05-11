@@ -47,7 +47,7 @@ import (
 
 	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	v1qos "k8s.io/kubernetes/pkg/apis/core/v1/helper/qos"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/tainttoleration"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/tainttoleration"
 	utilfs "k8s.io/kubernetes/pkg/util/filesystem"
 	utilpod "k8s.io/kubernetes/pkg/util/pod"
 	netutils "k8s.io/utils/net"

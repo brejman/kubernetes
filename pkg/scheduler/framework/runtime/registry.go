@@ -23,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/json"
 	fwk "k8s.io/kube-scheduler/framework"
-	plfeature "k8s.io/kubernetes/pkg/scheduler/framework/plugins/feature"
+	plfeature "k8s.io/kube-scheduler/framework/scheduling/plugins/feature"
 	"sigs.k8s.io/yaml"
 )
 

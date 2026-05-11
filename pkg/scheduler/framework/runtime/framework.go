@@ -44,7 +44,7 @@ import (
 	apidispatcher "k8s.io/kubernetes/pkg/scheduler/backend/api_dispatcher"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/parallelize"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/names"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 )
 

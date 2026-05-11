@@ -31,7 +31,7 @@ import (
 	componentbasevalidation "k8s.io/component-base/config/validation"
 	v1helper "k8s.io/kubernetes/pkg/apis/core/v1/helper"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
-	schedfeature "k8s.io/kubernetes/pkg/scheduler/framework/plugins/feature"
+	schedfeature "k8s.io/kube-scheduler/framework/scheduling/plugins/feature"
 )
 
 // ValidateKubeSchedulerConfiguration ensures validation of the KubeSchedulerConfiguration struct

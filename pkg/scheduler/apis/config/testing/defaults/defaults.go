@@ -21,7 +21,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/names"
 )
 
 // PluginsV1 is the set of default v1 plugins (before MultiPoint expansion)

@@ -33,7 +33,7 @@ import (
 	featuregatetesting "k8s.io/component-base/featuregate/testing"
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
-	schedfeature "k8s.io/kubernetes/pkg/scheduler/framework/plugins/feature"
+	schedfeature "k8s.io/kube-scheduler/framework/scheduling/plugins/feature"
 )
 
 var (

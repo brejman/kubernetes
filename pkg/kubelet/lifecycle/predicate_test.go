@@ -32,10 +32,10 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/kubelet/types"
 	schedulerframework "k8s.io/kubernetes/pkg/scheduler/framework"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeaffinity"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodename"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/nodeports"
-	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/tainttoleration"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/nodeaffinity"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/nodename"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/nodeports"
+	"k8s.io/kube-scheduler/framework/scheduling/plugins/tainttoleration"
 	"k8s.io/utils/ptr"
 )
 
