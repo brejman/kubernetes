@@ -868,6 +868,9 @@ type Handle interface {
 	// Only PodGroupPostFilter extension point can use this.
 	MutableSnapshotSharedLister() MutableSnapshotSharedLister
 
+	// SnapshotWrapper returns the SnapshotWrapper.
+	SnapshotWrapper() SnapshotWrapper
+
 	// IterateOverWaitingPods acquires a read lock and iterates over the WaitingPods map.
 	IterateOverWaitingPods(callback func(WaitingPod))
 

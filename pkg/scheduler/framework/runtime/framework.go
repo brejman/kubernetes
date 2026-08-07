@@ -42,9 +42,11 @@ import (
 	"k8s.io/kubernetes/pkg/features"
 	"k8s.io/kubernetes/pkg/scheduler/apis/config"
 	apidispatcher "k8s.io/kubernetes/pkg/scheduler/backend/api_dispatcher"
+	"k8s.io/kubernetes/pkg/scheduler/backend/cache"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/parallelize"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
+	"k8s.io/kubernetes/pkg/scheduler/framework/runtime/snapshot"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 )
 
@@ -59,6 +61,7 @@ type frameworkImpl struct {
 	registry                  Registry
 	snapshotSharedLister      fwk.SharedLister
 	mutableSnapshotLister     fwk.MutableSnapshotSharedLister
+	snapshotWrapper           *snapshot.SnapshotWrapper
 	waitingPods               *waitingPodsMap
 	podsInPreBind             *podsInPreBindMap
 	scorePluginWeight         map[string]int
@@ -159,6 +162,7 @@ type frameworkOptions struct {
 	sharedCSIManager       fwk.CSIManager
 	snapshotSharedLister   fwk.SharedLister
 	mutableSnapshotLister  fwk.MutableSnapshotSharedLister
+	snapshotWrapper        *snapshot.SnapshotWrapper
 	metricsRecorder        *metrics.MetricAsyncRecorder
 	podNominator           fwk.PodNominator
 	podActivator           fwk.PodActivator
@@ -238,6 +242,13 @@ func WithSnapshotSharedLister(snapshotSharedLister fwk.SharedLister) Option {
 func WithMutableSnapshotLister(mutableSnapshotLister fwk.MutableSnapshotSharedLister) Option {
 	return func(o *frameworkOptions) {
 		o.mutableSnapshotLister = mutableSnapshotLister
+	}
+}
+
+// WithSnapshotWrapper sets snapshotWrapper for the scheduling frameworkImpl.
+func WithSnapshotWrapper(snapshotWrapper *snapshot.SnapshotWrapper) Option {
+	return func(o *frameworkOptions) {
+		o.snapshotWrapper = snapshotWrapper
 	}
 }
 
@@ -349,6 +360,7 @@ func NewFramework(ctx context.Context, r Registry, profile *config.KubeScheduler
 		registry:              r,
 		snapshotSharedLister:  options.snapshotSharedLister,
 		mutableSnapshotLister: options.mutableSnapshotLister,
+		snapshotWrapper:       options.snapshotWrapper,
 		sharedCSIManager:      options.sharedCSIManager,
 		waitingPods:           options.waitingPods,
 		podsInPreBind:         options.podsInPreBind,
@@ -365,6 +377,21 @@ func NewFramework(ctx context.Context, r Registry, profile *config.KubeScheduler
 		podGroupManager:       options.podGroupManager,
 		parallelizer:          options.parallelizer,
 		logger:                logger,
+	}
+
+	if f.snapshotWrapper == nil {
+		if snap, ok := f.snapshotSharedLister.(*cache.Snapshot); ok {
+			f.snapshotWrapper = snapshot.NewSnapshotWrapper(f, snap)
+		} else if snap, ok := f.mutableSnapshotLister.(*cache.Snapshot); ok {
+			f.snapshotWrapper = snapshot.NewSnapshotWrapper(f, snap)
+		}
+	} else {
+		f.snapshotWrapper.SetHandle(f)
+	}
+	if f.mutableSnapshotLister == nil {
+		if snap, ok := f.snapshotSharedLister.(*cache.Snapshot); ok {
+			f.mutableSnapshotLister = snap
+		}
 	}
 
 	if utilfeature.DefaultFeatureGate.Enabled(features.OpportunisticBatching) {
@@ -989,6 +1016,11 @@ func (f *frameworkImpl) RunPreFilterPlugins(ctx context.Context, state fwk.Cycle
 
 			// When PreFilterResult filters out Nodes, the framework considers Nodes that are filtered out as getting "UnschedulableAndUnresolvable".
 			return result, fwk.NewStatus(fwk.UnschedulableAndUnresolvable, msg), pluginsWithNodes
+		}
+	}
+	if f.snapshotWrapper != nil && returnStatus.IsSuccess() {
+		if s := f.snapshotWrapper.Init(ctx, pod, state, result); !s.IsSuccess() {
+			return nil, s, nil
 		}
 	}
 	return result, returnStatus, pluginsWithNodes
@@ -2287,6 +2319,14 @@ func (f *frameworkImpl) SnapshotSharedLister() fwk.SharedLister {
 // Note: Only PodGroupPostFilter extension point can use this.
 func (f *frameworkImpl) MutableSnapshotSharedLister() fwk.MutableSnapshotSharedLister {
 	return f.mutableSnapshotLister
+}
+
+// SnapshotWrapper returns the scheduler's SnapshotWrapper.
+func (f *frameworkImpl) SnapshotWrapper() fwk.SnapshotWrapper {
+	if f.snapshotWrapper != nil {
+		return f.snapshotWrapper
+	}
+	return nil
 }
 
 // IterateOverWaitingPods acquires a read lock and iterates over the WaitingPods map.

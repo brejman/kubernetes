@@ -17,6 +17,8 @@ limitations under the License.
 package framework
 
 import (
+	"context"
+
 	v1 "k8s.io/api/core/v1"
 	resourceapi "k8s.io/api/resource/v1"
 	schedulingv1alpha3 "k8s.io/api/scheduling/v1alpha3"
@@ -71,7 +73,7 @@ type PodGroupLister interface {
 	Get(namespace, name string) (*schedulingapi.PodGroup, error)
 }
 
-// MutableSnapshotSharedLister interface represents a lister that allows mutating snapshot and restoring it afterwards.
+// MutableSnapshotSharedLister interface represents a lister that allows modifying node snapshot.
 // It extends SharedLister interface.
 // Only PodGroupPostFilter extension point can use this.
 type MutableSnapshotSharedLister interface {
@@ -91,6 +93,31 @@ type MutableSnapshotSharedLister interface {
 	// RemovePod should be called only if the mutation was started via StartMutations.
 	// The state will be reverted when EndMutations is called.
 	RemovePod(logger klog.Logger, pod *v1.Pod, nodeName string) error
+}
+
+// Savepoint represents a snapshot state in time that can be restored.
+type Savepoint any
+
+// SnapshotWrapper provides operations to mutate and evaluate pods against a snapshot.
+type SnapshotWrapper interface {
+	// Init initializes snapshot metadata for a pod in cycleState.
+	Init(ctx context.Context, pod *v1.Pod, cycleState CycleState, preFilterResult *PreFilterResult) *Status
+	// Sync synchronizes cycleState with the current snapshot version.
+	Sync(ctx context.Context, pod *v1.Pod, cycleState CycleState) *Status
+	// RecordAssumePod records an assumption of a pod in the snapshot.
+	RecordAssumePod(ctx context.Context, podInfo PodInfo, cycleState CycleState, nodeName string)
+	// RecordForgetPod records that an assumed pod was forgotten.
+	RecordForgetPod(ctx context.Context, pod *v1.Pod)
+	// RemovePod removes a pod from the snapshot and records the removal operation.
+	RemovePod(ctx context.Context, podInfo PodInfo) error
+	// RestorePod restores an existing pod to the snapshot and records the add operation.
+	RestorePod(ctx context.Context, podInfo PodInfo) error
+	// ReservePod reserves resources on a node for a pod in the snapshot and runs Reserve plugins.
+	ReservePod(ctx context.Context, podInfo PodInfo, cycleState CycleState, nodeName string) *Status
+	// GetSavepoint returns the current snapshot version as a Savepoint.
+	GetSavepoint() Savepoint
+	// RestoreSavepoint rolls back mutations to the target savepoint.
+	RestoreSavepoint(sp Savepoint)
 }
 
 // PodGroupStateLister provides read access to pod group states.

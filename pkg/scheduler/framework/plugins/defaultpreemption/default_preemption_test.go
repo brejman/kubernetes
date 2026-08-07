@@ -624,7 +624,6 @@ func TestPostFilter(t *testing.T) {
 					frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 					frameworkruntime.WithExtenders(extenders),
 					frameworkruntime.WithSnapshotSharedLister(snapshot),
-					frameworkruntime.WithMutableSnapshotLister(snapshot),
 					frameworkruntime.WithLogger(logger),
 					frameworkruntime.WithWaitingPods(frameworkruntime.NewWaitingPodsMap()),
 					frameworkruntime.WithPodsInPreBind(frameworkruntime.NewPodsInPreBindMap()),
@@ -1468,7 +1467,6 @@ func TestDryRunPreemption(t *testing.T) {
 				registeredPlugins, "",
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithParallelism(parallelism),
 				frameworkruntime.WithLogger(logger),
@@ -1715,7 +1713,6 @@ func TestSelectBestCandidate(t *testing.T) {
 				"",
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithLogger(logger),
 			)
@@ -2044,7 +2041,6 @@ func TestCustomSelection(t *testing.T) {
 				"",
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithLogger(logger),
 				frameworkruntime.WithPodGroupManager(cache),
@@ -2367,7 +2363,6 @@ func TestCustomOrdering(t *testing.T) {
 				"",
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithLogger(logger),
 				frameworkruntime.WithPodGroupManager(cache),
@@ -2589,7 +2584,6 @@ func TestPodEligibleToPreemptOthers(t *testing.T) {
 			snapshot := internalcache.NewTestSnapshotWithCompositePodGroups(test.pods, nodes, test.podGroups, test.compositePodGroups)
 			f, err := tf.NewFramework(ctx, registeredPlugins, "",
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithClientSet(cs),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithLogger(logger),
@@ -2896,7 +2890,6 @@ func TestPreempt(t *testing.T) {
 						frameworkruntime.WithExtenders(extenders),
 						frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 						frameworkruntime.WithSnapshotSharedLister(snapshot),
-						frameworkruntime.WithMutableSnapshotLister(snapshot),
 						frameworkruntime.WithInformerFactory(informerFactory),
 						frameworkruntime.WithWaitingPods(waitingPods),
 						frameworkruntime.WithPodsInPreBind(frameworkruntime.NewPodsInPreBindMap()),
@@ -3456,7 +3449,6 @@ func TestSelectVictimsOnNode(t *testing.T) {
 				registeredPlugins, "",
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithParallelism(parallelism),
 				frameworkruntime.WithLogger(logger),
@@ -3767,7 +3759,6 @@ func TestPreEnqueue(t *testing.T) {
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithLogger(logger),
 				frameworkruntime.WithWaitingPods(frameworkruntime.NewWaitingPodsMap()),
 				frameworkruntime.WithPodsInPreBind(frameworkruntime.NewPodsInPreBindMap()),
@@ -3911,7 +3902,6 @@ func TestDefaultPreemption_PodGroupPostFilter_ErrorWrapping(t *testing.T) {
 			f, err := tf.NewFramework(ctx, registeredPlugins, "",
 				frameworkruntime.WithClientSet(client),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithLogger(logger),
@@ -3951,39 +3941,19 @@ func TestDefaultPreemption_PodGroupPostFilter_ErrorWrapping(t *testing.T) {
 
 func TestDefaultPreemption_PodGroupPostFilter_InvalidSnapshot(t *testing.T) {
 	tests := []struct {
-		name               string
-		isCPG              bool
-		endMutationError   error
-		startMutationError error
-		expectedMsg        string
+		name        string
+		isCPG       bool
+		expectedMsg string
 	}{
 		{
-			name:               "PodGroup start mutation error",
-			isCPG:              false,
-			endMutationError:   nil,
-			startMutationError: errors.New("start mutation error"),
-			expectedMsg:        "pod group preemption: failed to start mutations: start mutation error",
+			name:        "PodGroup nil snapshot wrapper",
+			isCPG:       false,
+			expectedMsg: "pod group preemption: snapshot wrapper is not available",
 		},
 		{
-			name:               "PodGroup end mutation error",
-			isCPG:              false,
-			endMutationError:   errors.New("end mutation error"),
-			startMutationError: nil,
-			expectedMsg:        "pod group preemption: failed to end mutations: end mutation error",
-		},
-		{
-			name:               "CompositePodGroup start mutation error",
-			isCPG:              true,
-			endMutationError:   nil,
-			startMutationError: errors.New("start mutation error"),
-			expectedMsg:        "pod group preemption: failed to start mutations: start mutation error",
-		},
-		{
-			name:               "CompositePodGroup end mutation error",
-			isCPG:              true,
-			endMutationError:   errors.New("end mutation error"),
-			startMutationError: nil,
-			expectedMsg:        "pod group preemption: failed to end mutations: end mutation error",
+			name:        "CompositePodGroup nil snapshot wrapper",
+			isCPG:       true,
+			expectedMsg: "pod group preemption: snapshot wrapper is not available",
 		},
 	}
 	for _, tt := range tests {
@@ -3992,23 +3962,19 @@ func TestDefaultPreemption_PodGroupPostFilter_InvalidSnapshot(t *testing.T) {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 
-			node := st.MakeNode().Name("node1").Capacity(veryLargeRes).Obj()
 			pod := st.MakePod().Name("pod1").UID("pod1").Node("node1").Priority(lowPriority).Obj()
-			testPods := []*v1.Pod{pod}
-			nodes := []*v1.Node{node}
 
 			var pg *v1beta1.PodGroup
 			var cpg *v1alpha3.CompositePodGroup
 			var client *clientsetfake.Clientset
-			var cache internalcache.Cache
 			var snapshot *internalcache.Snapshot
-
+			var cache internalcache.Cache
 			if !tt.isCPG {
 				pg = st.MakePodGroup().Name("preemptor-pg-ok").Priority(highPriority).Obj()
 				client = clientsetfake.NewClientset(pod, pg)
 				cache = internalcache.New(ctx, nil, true, false)
 				cache.AddPodGroup(pg)
-				snapshot = internalcache.NewTestSnapshotWithPodGroups(testPods, nodes, []*v1beta1.PodGroup{pg})
+				snapshot = internalcache.NewTestSnapshotWithPodGroups([]*v1.Pod{pod}, nil, []*v1beta1.PodGroup{pg})
 			} else {
 				priorityVal := highPriority
 				cpg = &v1alpha3.CompositePodGroup{
@@ -4022,7 +3988,7 @@ func TestDefaultPreemption_PodGroupPostFilter_InvalidSnapshot(t *testing.T) {
 				}
 				client = clientsetfake.NewClientset(pod)
 				cache = internalcache.New(ctx, nil, true, true /* compositePodGroupEnabled */)
-				snapshot = internalcache.NewTestSnapshotWithCompositePodGroups(testPods, nodes, nil, []*v1alpha3.CompositePodGroup{cpg})
+				snapshot = internalcache.NewTestSnapshotWithCompositePodGroups([]*v1.Pod{pod}, nil, nil, []*v1alpha3.CompositePodGroup{cpg})
 			}
 
 			informerFactory := informers.NewSharedInformerFactory(client, 0)
@@ -4034,7 +4000,6 @@ func TestDefaultPreemption_PodGroupPostFilter_InvalidSnapshot(t *testing.T) {
 			f, err := tf.NewFramework(ctx, registeredPlugins, "",
 				frameworkruntime.WithClientSet(client),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(&mockMutableSnapshotLister{MutableSnapshotSharedLister: snapshot, startMutationError: tt.startMutationError, endMutationError: tt.endMutationError}),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithLogger(logger),
@@ -4052,6 +4017,7 @@ func TestDefaultPreemption_PodGroupPostFilter_InvalidSnapshot(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			pl.fh = &nilSnapshotWrapperHandle{Handle: f}
 
 			preemptorPods := []*v1.Pod{st.MakePod().Name("p").UID("p").Priority(highPriority).Obj()}
 			mockSchedulingFunc := func(ctx context.Context) (*fwk.PodGroupAssignments, *fwk.Status) {
@@ -4107,7 +4073,6 @@ func TestDefaultPreemption_PodGroupPostFilter_CompositePodGroup(t *testing.T) {
 	f, err := tf.NewFramework(ctx, registeredPlugins, "",
 		frameworkruntime.WithClientSet(client),
 		frameworkruntime.WithSnapshotSharedLister(snapshot),
-		frameworkruntime.WithMutableSnapshotLister(snapshot),
 		frameworkruntime.WithInformerFactory(informerFactory),
 		frameworkruntime.WithLogger(logger),
 		frameworkruntime.WithPodGroupManager(cache),
@@ -4156,10 +4121,12 @@ func TestDefaultPreemption_PodGroupPostFilter_CompositePodGroup(t *testing.T) {
 }
 
 type mockMutableSnapshotLister struct {
-	fwk.MutableSnapshotSharedLister
+	fwk.SharedLister
 	startMutationError error
 	endMutationError   error
 }
+
+var _ fwk.MutableSnapshotSharedLister = &mockMutableSnapshotLister{}
 
 func (m *mockMutableSnapshotLister) AddPod(podInfo fwk.PodInfo, nodeName string) error {
 	return nil
@@ -4185,12 +4152,34 @@ func (m *mockPodGroupEvaluator) Preempt(ctx context.Context, pgInfo fwk.PodGroup
 	return nil, m.status
 }
 
+type mockSnapshotWrapper struct {
+	fwk.SnapshotWrapper
+}
+
+func (m *mockSnapshotWrapper) GetSavepoint() fwk.Savepoint {
+	return nil
+}
+
+func (m *mockSnapshotWrapper) RestoreSavepoint(sp fwk.Savepoint) {}
+
 type mockHandle struct {
 	fwk.Handle
 }
 
 func (m *mockHandle) MutableSnapshotSharedLister() fwk.MutableSnapshotSharedLister {
 	return &mockMutableSnapshotLister{}
+}
+
+func (m *mockHandle) SnapshotWrapper() fwk.SnapshotWrapper {
+	return &mockSnapshotWrapper{}
+}
+
+type nilSnapshotWrapperHandle struct {
+	fwk.Handle
+}
+
+func (h *nilSnapshotWrapperHandle) SnapshotWrapper() fwk.SnapshotWrapper {
+	return nil
 }
 
 func TestDefaultPreemption_PodGroupPostFilter_WorkloadPreemptionAttempts(t *testing.T) {

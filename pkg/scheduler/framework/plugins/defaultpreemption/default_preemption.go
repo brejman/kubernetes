@@ -507,16 +507,9 @@ func (pl *DefaultPreemption) PodGroupPostFilter(ctx context.Context, state fwk.P
 		metrics.WorkloadPreemptionAttempts.WithLabelValues(status.Code().String()).Inc()
 	}()
 
-	mutableLister := pl.fh.MutableSnapshotSharedLister()
-	err := mutableLister.StartMutations()
-	if err != nil {
-		return nil, fwk.AsStatus(fmt.Errorf("pod group preemption: failed to start mutations: %w", err))
-	}
-	defer func() {
-		if err := mutableLister.EndMutations(); err != nil {
-			status = fwk.AsStatus(fmt.Errorf("pod group preemption: failed to end mutations: %w", err))
-		}
-	}()
+	snapshotWrapper := pl.fh.SnapshotWrapper()
+	savepoint := snapshotWrapper.GetSavepoint()
+	defer snapshotWrapper.RestoreSavepoint(savepoint)
 
 	res, status := pl.podGroupEvaluator.Preempt(ctx, pgInfo, pgSchedulingFunc)
 	msg := status.Message()

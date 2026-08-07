@@ -241,7 +241,6 @@ func TestDryRunPreemption(t *testing.T) {
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithParallelism(parallelism),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithLogger(logger),
 			)
 			if err != nil {
@@ -343,7 +342,6 @@ func TestSelectCandidate(t *testing.T) {
 				"",
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithLogger(logger),
 			)
@@ -613,7 +611,6 @@ func TestCallExtenders(t *testing.T) {
 				frameworkruntime.WithExtenders(tt.extenders),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 			)
 			if err != nil {
@@ -1000,7 +997,6 @@ func TestGetVictimsOnNode(t *testing.T) {
 				"",
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithPodGroupManager(cache),
 				frameworkruntime.WithLogger(logger),
 			)
@@ -1131,7 +1127,6 @@ func TestPreemptionEvaluationDurationMetric(t *testing.T) {
 				frameworkruntime.WithWaitingPods(frameworkruntime.NewWaitingPodsMap()),
 				frameworkruntime.WithPodsInPreBind(frameworkruntime.NewPodsInPreBindMap()),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 			)
 			if err != nil {

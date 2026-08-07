@@ -18,7 +18,6 @@ package preemption
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -149,7 +148,10 @@ func (ev *PodGroupEvaluator) selectVictimsOnDomain(
 
 	nameToNode := domain.Nodes()
 
-	mutableLister := ev.Handle.MutableSnapshotSharedLister()
+	snapshotWrapper := ev.Handle.SnapshotWrapper()
+	if snapshotWrapper == nil {
+		return nil, fwk.AsStatus(fmt.Errorf("snapshot wrapper is not available"))
+	}
 
 	// removePods removes all victims from the snapshot.
 	// This is called before the podGroupSchedulingFunc so it does not have
@@ -157,48 +159,8 @@ func (ev *PodGroupEvaluator) selectVictimsOnDomain(
 	// and fills them by running PreFilter plugins for preemptor pods.
 	removePods := func(v *DomainVictim) error {
 		for _, pi := range v.Pods() {
-			if err := mutableLister.RemovePod(logger, pi.GetPod(), pi.GetPod().Spec.NodeName); err != nil {
+			if err := snapshotWrapper.RemovePod(ctx, pi); err != nil {
 				return err
-			}
-		}
-		return nil
-	}
-
-	// addVictimPodsWithPreFilter simulates adding back victim's pods to the snapshot
-	// and calls PreFilterExtensionAddPod() for all preemptor pods's proposed valid assignments.
-	// The node passed to the RunPreFilterExtensionAddPod will have the victim pod
-	// added.
-	addVictimPodsWithPreFilter := func(v *DomainVictim, preemptorAssignments []fwk.ProposedAssignment) error {
-		for _, pi := range v.Pods() {
-			nodeInfo := nameToNode[pi.GetPod().Spec.NodeName]
-			if err := mutableLister.AddPod(pi, pi.GetPod().Spec.NodeName); err != nil {
-				return err
-			}
-			for _, assignment := range preemptorAssignments {
-				status := ev.Handle.RunPreFilterExtensionAddPod(ctx, assignment.GetCycleState(), assignment.GetPod(), pi, nodeInfo)
-				if !status.IsSuccess() {
-					return status.AsError()
-				}
-			}
-		}
-		return nil
-	}
-
-	// removeVictimPodsWithPreFilter removes all victims from the snapshot
-	// and calls PreFilterExtensionRemovePod(victim) for all preemptor pods.
-	// The node passed to the RunPreFilterExtensionRemovePod will have the victim pod
-	// removed.
-	removeVictimPodsWithPreFilter := func(v *DomainVictim, preemptorAssignments []fwk.ProposedAssignment) error {
-		for _, pi := range v.Pods() {
-			nodeInfo := nameToNode[pi.GetPod().Spec.NodeName]
-			if err := mutableLister.RemovePod(logger, pi.GetPod(), pi.GetPod().Spec.NodeName); err != nil {
-				return err
-			}
-			for _, assignment := range preemptorAssignments {
-				status := ev.Handle.RunPreFilterExtensionRemovePod(ctx, assignment.GetCycleState(), assignment.GetPod(), pi, nodeInfo)
-				if !status.IsSuccess() {
-					return status.AsError()
-				}
 			}
 		}
 		return nil
@@ -256,56 +218,41 @@ func (ev *PodGroupEvaluator) selectVictimsOnDomain(
 	}
 
 	// reprieveVictim tries to reprieve a victim as a single unit.
-	// It adds all victim's pods back to snapshot and to CycleStates of preemptor pods
-	// It then goes through preemptor's proposed assignments and runs FilterPlugins for a given preemptor
+	// It restores all victim's pods back to snapshot and syncs CycleStates of preemptor pods.
+	// It then goes through preemptor's proposed assignments and runs FilterPod for a given preemptor
 	// pod on proposed node.
-	// If all FilterPlugins succeed, it returns true.
-	// Preemptor pods are evaluated in the same order as in the scheduling cycle.
-	// This logic uses the CycleState returned for each of the preemptor pods from the
-	// scheduling algorithm called on a cluster without victims.
-	// This means that the CycleState for the Nth preemptor pod was created with:
-	// - all previous preemptor pods assumed and reserved
-	// - no knowledge of upcoming preemptor pods
+	// If all Filter plugins succeed, it reserves preemptor pods and restores savepoint to keep the victim in snapshot.
+	// If any preemptor pod fails, it restores the savepoint before the victim was added.
 	reprieveVictim := func(v *DomainVictim, preemptorAssignments []fwk.ProposedAssignment) (fits bool, err error) {
-		if err = addVictimPodsWithPreFilter(v, preemptorAssignments); err != nil {
-			return false, err
-		}
-		cleanupFns := []func() error{}
-		defer func() {
-			for i := len(cleanupFns) - 1; i >= 0; i-- {
-				if cleanupErr := cleanupFns[i](); cleanupErr != nil {
-					err = errors.Join(err, cleanupErr)
-				}
+		savepointBeforeVictim := snapshotWrapper.GetSavepoint()
+		for _, pi := range v.Pods() {
+			if err := snapshotWrapper.RestorePod(ctx, pi); err != nil {
+				return false, err
 			}
-		}()
-		fits = true
+		}
+		savepointWithVictim := snapshotWrapper.GetSavepoint()
+
 		for _, assignment := range preemptorAssignments {
+			if status := snapshotWrapper.Sync(ctx, assignment.GetPod(), assignment.GetCycleState()); !status.IsSuccess() {
+				snapshotWrapper.RestoreSavepoint(savepointBeforeVictim)
+				return false, status.AsError()
+			}
 			nodeInfo := nameToNode[assignment.GetNodeName()]
-			s := ev.Handle.RunFilterPluginsWithNominatedPods(ctx, assignment.GetCycleState(), assignment.GetPod(), nodeInfo)
-			if !s.IsSuccess() {
-				if err = removeVictimPodsWithPreFilter(v, preemptorAssignments); err != nil {
-					return false, err
-				}
+			if status := ev.Handle.RunFilterPluginsWithNominatedPods(ctx, assignment.GetCycleState(), assignment.GetPod(), nodeInfo); !status.IsSuccess() {
+				snapshotWrapper.RestoreSavepoint(savepointBeforeVictim)
 				if l := logger.V(6); l.Enabled() {
 					l.Info("Pods are potential preemption victims on domain", "pods", toPodNames(v.Pods()), "domain", domain.GetName())
 				}
 				return false, nil
 			}
-			// Simulate assuming a preemptor pod and reserving stateful plugins resources.
-			// We do not need to add the preemptor pod to the cycle state of upcoming preemptor pods.
-			// This is because the cycle state was created with them already assumed.
-			if err = mutableLister.AddPod(assignment.GetPodInfo(), assignment.GetNodeName()); err != nil {
-				return false, err
+			if status := snapshotWrapper.ReservePod(ctx, assignment.GetPodInfo(), assignment.GetCycleState(), assignment.GetNodeName()); !status.IsSuccess() {
+				snapshotWrapper.RestoreSavepoint(savepointBeforeVictim)
+				return false, status.AsError()
 			}
-			ev.Handle.RunReservePluginsReserve(ctx, assignment.GetCycleState(), assignment.GetPod(), nodeInfo.Node().GetName())
-			cleanupFns = append(cleanupFns, func() error {
-				if ev.Handle.RunReservePluginsUnreserve(ctx, assignment.GetCycleState(), assignment.GetPod(), nodeInfo.Node().GetName()); err != nil {
-					return err
-				}
-				return mutableLister.RemovePod(logger, assignment.GetPod(), assignment.GetNodeName())
-			})
 		}
-		return fits, nil
+
+		snapshotWrapper.RestoreSavepoint(savepointWithVictim)
+		return true, nil
 	}
 
 	// Try to reprieve as many pods as possible. We first try to reprieve the PDB

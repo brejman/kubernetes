@@ -325,7 +325,7 @@ func (sched *Scheduler) assumeAndReserve(
 	assumedPodInfo := podInfo.DeepCopy()
 	assumedPod := assumedPodInfo.Pod
 	// assume modifies `assumedPod` by setting NodeName=scheduleResult.SuggestedHost
-	err := sched.assume(logger, state, assumedPodInfo, scheduleResult.SuggestedHost)
+	err := sched.assume(logger, state, assumedPodInfo, scheduleResult.SuggestedHost, schedFramework)
 	if err != nil {
 		// This is most probably result of a BUG in retrying logic.
 		// We report an error here so that pod scheduling can be retried.
@@ -377,6 +377,9 @@ func (sched *Scheduler) unreserveAndForget(
 		err := sched.nodeInfoSnapshot.ForgetPod(logger, assumedPodInfo.Pod)
 		if err != nil {
 			return err
+		}
+		if wrapper := schedFramework.SnapshotWrapper(); wrapper != nil {
+			wrapper.RecordForgetPod(ctx, assumedPodInfo.Pod)
 		}
 		if assumedPodInfo.Pod.Status.NominatedNodeName != "" {
 			// Assume method removed the nomination, but since we are reverting that stage for pod groups,
@@ -1057,7 +1060,7 @@ func prioritizeNodes(
 
 // assume signals to the cache that a pod is already in the cache, so that binding can be asynchronous.
 // When called during pod group scheduling cycle, pod is assumed in the snapshot instead.
-func (sched *Scheduler) assume(logger klog.Logger, state fwk.CycleState, assumedPodInfo *framework.QueuedPodInfo, host string) error {
+func (sched *Scheduler) assume(logger klog.Logger, state fwk.CycleState, assumedPodInfo *framework.QueuedPodInfo, host string, schedFramework framework.Framework) error {
 	// Optimistically assume that the binding will succeed and send it to apiserver
 	// in the background.
 	// If the binding fails, scheduler will release resources allocated to assumed pod
@@ -1079,6 +1082,9 @@ func (sched *Scheduler) assume(logger klog.Logger, state fwk.CycleState, assumed
 		if err != nil {
 			logger.Error(err, "Scheduler snapshot AssumePod failed")
 			return err
+		}
+		if wrapper := schedFramework.SnapshotWrapper(); wrapper != nil {
+			wrapper.RecordAssumePod(context.Background(), assumedPodInfo.PodInfo, state, host)
 		}
 	} else {
 		if err := sched.Cache.AssumePod(logger, assumedPodInfo.Pod); err != nil {

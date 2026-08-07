@@ -815,14 +815,8 @@ func (s *Snapshot) ListNodesInPlacement() ([]fwk.NodeInfo, error) {
 }
 
 // AddPod adds a pod to the snapshot.
-// AddPod should be called only if the mutation was started via StartMutations.
-// Compared to the AssumePod() function, the AddPod does not have to be reverted
-// via RemovePod(). The state will be reverted when EndMutation is called.
 // This function is not thread safe, so it should be executed when no other routines can write/read from the snapshot.
 func (s *Snapshot) AddPod(podInfo fwk.PodInfo, nodeName string) error {
-	if s.snapshotBackup == nil {
-		return fmt.Errorf("AddPod() called outside of mutation session")
-	}
 	nodeInfo, ok := s.nodeInfoMap[nodeName]
 	if !ok {
 		nodeInfo = framework.NewNodeInfo()
@@ -834,7 +828,9 @@ func (s *Snapshot) AddPod(podInfo fwk.PodInfo, nodeName string) error {
 	hadPodsWithRequiredNonHostScopedAntiAffinity := len(nodeInfo.PodsWithRequiredNonHostScopedAntiAffinity) > 0
 
 	pod := podInfo.GetPod()
+	gen := nodeInfo.Generation
 	nodeInfo.AddPodInfo(podInfo)
+	nodeInfo.Generation = gen
 
 	// nodeInfo.AddPodInfo maintains the NodeInfo's affinity and PVC indexes;
 	// the snapshot-wide indexes must be updated to match, otherwise inter-pod
@@ -864,13 +860,8 @@ func (s *Snapshot) AddPod(podInfo fwk.PodInfo, nodeName string) error {
 }
 
 // RemovePod removes a pod from the snapshot.
-// RemovePod should be called only if the mutation was started via StartMutation.
-// The state will be reverted when EndMutation is called.
 // This function is not thread safe, so it should be executed when no other routines can write/read from the snapshot.
 func (s *Snapshot) RemovePod(logger klog.Logger, pod *v1.Pod, nodeName string) error {
-	if s.snapshotBackup == nil {
-		return fmt.Errorf("RemovePod() called outside of mutation session")
-	}
 	nodeInfo, ok := s.nodeInfoMap[nodeName]
 	if !ok {
 		return fmt.Errorf("node %q not found in the snapshot", nodeName)
@@ -880,9 +871,11 @@ func (s *Snapshot) RemovePod(logger klog.Logger, pod *v1.Pod, nodeName string) e
 	hadPodsWithRequiredAntiAffinity := len(nodeInfo.PodsWithRequiredAntiAffinity) > 0
 	hadPodsWithRequiredNonHostScopedAntiAffinity := len(nodeInfo.PodsWithRequiredNonHostScopedAntiAffinity) > 0
 
+	gen := nodeInfo.Generation
 	if err := nodeInfo.RemovePod(logger, pod); err != nil {
 		return err
 	}
+	nodeInfo.Generation = gen
 
 	havePodsWithAffinity := len(nodeInfo.PodsWithAffinity) > 0
 	havePodsWithRequiredAntiAffinity := len(nodeInfo.PodsWithRequiredAntiAffinity) > 0

@@ -1221,7 +1221,6 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain(t *testing.T) {
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithParallelism(parallelism),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithLogger(logger),
 			)
 			if err != nil {
@@ -1376,7 +1375,6 @@ func TestPodGroupEvaluator_SelectVictimsOnDomain_NominatedNodes(t *testing.T) {
 		frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 		frameworkruntime.WithInformerFactory(informerFactory),
 		frameworkruntime.WithSnapshotSharedLister(snapshot),
-		frameworkruntime.WithMutableSnapshotLister(snapshot),
 		frameworkruntime.WithLogger(logger),
 	)
 	if err != nil {
@@ -1575,7 +1573,6 @@ func TestPodGroupEvaluator_Preempt(t *testing.T) {
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithLogger(logger),
 			)
 			if err != nil {
@@ -1701,7 +1698,6 @@ func TestPodGroupPreemptionEvaluationDurationMetric(t *testing.T) {
 				frameworkruntime.WithPodNominator(internalqueue.NewSchedulingQueue(nil, informerFactory)),
 				frameworkruntime.WithInformerFactory(informerFactory),
 				frameworkruntime.WithSnapshotSharedLister(snapshot),
-				frameworkruntime.WithMutableSnapshotLister(snapshot),
 				frameworkruntime.WithLogger(logger),
 			)
 			if err != nil {

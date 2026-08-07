@@ -1519,43 +1519,6 @@ func TestSnapshot_CreateUsedPVCRefCounts(t *testing.T) {
 	}
 }
 
-func TestSnapshot_AddRemovePodWithoutMutations(t *testing.T) {
-	node := st.MakeNode().Name("node-1").Obj()
-	pod := st.MakePod().Name("p1").Node("node-1").Obj()
-	podInfo, _ := framework.NewPodInfo(pod)
-
-	tests := []struct {
-		name        string
-		podToAdd    *framework.PodInfo
-		podToRemove *v1.Pod
-	}{
-		{
-			name:     "AddPod without mutation session should fail",
-			podToAdd: podInfo,
-		},
-		{
-			name:        "RemovePod without mutation session should fail",
-			podToRemove: pod,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			logger, _ := ktesting.NewTestContext(t)
-			s := NewSnapshot([]*v1.Pod{pod}, []*v1.Node{node})
-			var err error
-			if tt.podToAdd != nil {
-				err = s.AddPod(tt.podToAdd, tt.podToAdd.Pod.Spec.NodeName)
-			}
-			if tt.podToRemove != nil {
-				err = s.RemovePod(logger, tt.podToRemove, tt.podToRemove.Spec.NodeName)
-			}
-			if err == nil {
-				t.Fatalf("expected error, got nil")
-			}
-		})
-	}
-}
 
 func TestSnapshot_AddRemovePod(t *testing.T) {
 	podWithAffinity := st.MakePod().Name("p-aff").Namespace("ns").UID("p-aff").PodAffinity("key", &metav1.LabelSelector{MatchLabels: map[string]string{"key": "value"}}, st.PodAffinityWithRequiredReq).Node("node-1").Obj()

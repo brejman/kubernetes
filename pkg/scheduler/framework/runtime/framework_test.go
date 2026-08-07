@@ -47,6 +47,7 @@ import (
 	internalqueue "k8s.io/kubernetes/pkg/scheduler/backend/queue"
 	"k8s.io/kubernetes/pkg/scheduler/framework"
 	"k8s.io/kubernetes/pkg/scheduler/framework/plugins/names"
+	"k8s.io/kubernetes/pkg/scheduler/framework/runtime/snapshot"
 	"k8s.io/kubernetes/pkg/scheduler/metrics"
 	st "k8s.io/kubernetes/pkg/scheduler/testing"
 	"k8s.io/utils/ptr"
@@ -5777,5 +5778,41 @@ scheduler_plugin_evaluation_total{extension_point="Score",plugin="plugin-eval-sc
 `
 	if err := testutil.GatherAndCompare(metrics.GetGather(), strings.NewReader(want), metrics.PluginEvaluationTotal.Name); err != nil {
 		t.Fatalf("unexpected plugin_evaluation_total metric output:\n%v", err)
+	}
+}
+
+func TestRunPreFilterPlugins_SnapshotWrapperInit(t *testing.T) {
+	ctx := context.Background()
+	pod := &v1.Pod{ObjectMeta: metav1.ObjectMeta{Name: "pod1", Namespace: "default"}}
+	snap := cache.NewSnapshot(nil, []*v1.Node{{ObjectMeta: metav1.ObjectMeta{Name: "node1"}}})
+
+	registry := Registry{}
+	profile := config.KubeSchedulerProfile{
+		SchedulerName: "test-profile",
+		Plugins:       &config.Plugins{},
+	}
+
+	sw := snapshot.NewSnapshotWrapper(nil, snap)
+	f, err := newFrameworkWithQueueSortAndBind(ctx, registry, profile, WithSnapshotSharedLister(snap), WithSnapshotWrapper(sw))
+	if err != nil {
+		t.Fatalf("failed to create framework: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	sw.SetHandle(f)
+
+	state := framework.NewCycleState()
+	result, status, _ := f.RunPreFilterPlugins(ctx, state, pod)
+	if status != nil && !status.IsSuccess() {
+		t.Fatalf("RunPreFilterPlugins failed: %v", status)
+	}
+	if result != nil {
+		t.Fatalf("expected nil result, got %v", result)
+	}
+
+	// Sync via wrapper should work on node1 using initialized metadata
+	status = sw.Sync(ctx, pod, state)
+	if !status.IsSuccess() {
+		t.Fatalf("expected Sync to succeed on initialized state, got: %v", status)
 	}
 }
